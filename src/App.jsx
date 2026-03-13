@@ -18,6 +18,9 @@ import OwnerEditMenu from './Pages/owner_editmenu';
 import OwnerProfile from './Pages/owner_profile';
 import OwnerActiveDebts from './Pages/owner_ActiveDebts';
 
+// Your new Owner Dashboard
+import CreditSnapDashboard from './Pages/owner_dashboard';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -38,13 +41,17 @@ export default function App() {
 
         {/* --- Protected Owner Routes --- */}
         <Route path="/owner" element={<OwnerLayout />}>
-          {/* Automatically redirects /owner to /owner/editmenu */}
-          <Route index element={<Navigate to="editmenu" replace />} />
+          {/* Automatically redirects /owner to your new dashboard */}
+          <Route index element={<Navigate to="dashboard" replace />} />
+          
+          {/* Your Owner Dashboard */}
+          <Route path="dashboard" element={<CreditSnapDashboard />} />
+
+          {/* Team's other Owner pages */}
           <Route path="editmenu" element={<OwnerEditMenu />} />
           <Route path="profile" element={<OwnerProfile />} />
           <Route path="debts" element={<OwnerActiveDebts/>}/>
         </Route>
-
       </Routes>
     </BrowserRouter>
   );
