@@ -11,12 +11,17 @@ import StudLayout from './Pages/stud_layout';
 import StudDashboard from './Pages/stud_Dashboard';
 import StudCanteens from './Pages/stud_canteens';
 import StudProfile from './Pages/stud_profile';
+// Added New Student Pages
+import StudViewDebts from './Pages/stud_ViewDebts'; 
+import StudAboutUs from './Pages/stud_Aboutus';
 
 // --- Owner Pages ---
 import OwnerLayout from './Pages/owner_layout';
 import OwnerEditMenu from './Pages/owner_editmenu';
 import OwnerProfile from './Pages/owner_profile';
 import OwnerActiveDebts from './Pages/owner_ActiveDebts';
+// Added New Owner Page
+import OwnerAboutUs from './Pages/owner_AboutUs';
 
 export default function App() {
   return (
@@ -34,6 +39,10 @@ export default function App() {
           <Route path="dashboard" element={<StudDashboard />} />
           <Route path="canteens" element={<StudCanteens />} />
           <Route path="profile" element={<StudProfile />} />
+          
+          {/* New Student Routes */}
+          <Route path="debts" element={<StudViewDebts />} /> 
+          <Route path="about" element={<StudAboutUs />} />
         </Route>
 
         {/* --- Protected Owner Routes --- */}
@@ -42,7 +51,10 @@ export default function App() {
           <Route index element={<Navigate to="editmenu" replace />} />
           <Route path="editmenu" element={<OwnerEditMenu />} />
           <Route path="profile" element={<OwnerProfile />} />
-          <Route path="debts" element={<OwnerActiveDebts/>}/>
+          <Route path="debts" element={<OwnerActiveDebts />} />
+          
+          {/* New Owner Route */}
+          <Route path="about" element={<OwnerAboutUs />} />
         </Route>
 
       </Routes>

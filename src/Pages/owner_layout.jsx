@@ -76,8 +76,10 @@ export default function OwnerLayout() {
 
           </nav>
         </div>
-        <div className="p-4 border-t border-slate-700 text-center cursor-pointer hover:bg-slate-700 transition">
-          <span className="text-sm text-gray-300">About us</span>
+        
+        {/* --- UPDATED: About us button with navigation and active state --- */}
+        <div onClick={() => navigate('/owner/about')} className={`p-4 border-t border-slate-700 text-center cursor-pointer transition ${isActive('about') ? 'bg-[#eab308] text-[#1e293b]' : 'hover:bg-slate-700 text-gray-300'}`}>
+          <span className={`text-sm ${isActive('about') ? 'font-semibold' : ''}`}>About us</span>
         </div>
       </aside>
 

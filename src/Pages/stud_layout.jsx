@@ -54,20 +54,25 @@ export default function StudLayout() {
               <Utensils className="w-6 h-6 mb-1" /><span className="text-sm font-semibold">Canteens</span>
             </div>
             
-            <div className="py-3 px-4 flex flex-col items-center justify-center text-gray-300 hover:text-white cursor-pointer opacity-70 transition">
-              <Wallet className="w-6 h-6 mb-1" /><span className="text-sm">View debts</span>
+            {/* UPDATED: View debts button */}
+            <div onClick={() => navigate('/student/debts')} className={`mx-2 py-3 px-4 rounded-xl flex flex-col items-center justify-center cursor-pointer transition ${isActive('debts') ? 'bg-[#f97316] text-white shadow-lg' : 'text-gray-300 hover:text-white opacity-70'}`}>
+              <Wallet className="w-6 h-6 mb-1" /><span className="text-sm font-semibold">View debts</span>
             </div>
+
             <div className="py-3 px-4 flex flex-col items-center justify-center text-gray-300 hover:text-white cursor-pointer opacity-70 transition">
               <History className="w-6 h-6 mb-1" /><span className="text-sm">History</span>
             </div>
+
             <div className="py-3 px-4 flex flex-col items-center justify-center text-gray-300 hover:text-white cursor-pointer opacity-70 transition">
               <HelpCircle className="w-6 h-6 mb-1" /><span className="text-sm">Help</span>
             </div>
 
           </nav>
         </div>
-        <div className="p-4 border-t border-slate-700 text-center cursor-pointer hover:bg-slate-700 transition">
-          <span className="text-sm text-gray-300">About us</span>
+        
+        {/* UPDATED: About us button */}
+        <div onClick={() => navigate('/student/about')} className={`p-4 border-t border-slate-700 text-center cursor-pointer transition ${isActive('about') ? 'bg-[#f97316] text-white' : 'hover:bg-slate-700 text-gray-300'}`}>
+          <span className={`text-sm ${isActive('about') ? 'font-semibold' : ''}`}>About us</span>
         </div>
       </aside>
 
