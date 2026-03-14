@@ -75,7 +75,7 @@ const Signup = () => {
           </form>
 
           <div className="login-redirect">
-            <span className="light-text">Already have an account? </span>
+            <span className="light-text">Already have account? </span>
             <a href="/">Login.</a>
           </div>
         </div>
