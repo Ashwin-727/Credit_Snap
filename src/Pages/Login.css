@@ -20,8 +20,8 @@
 .bg-blue-theme { background-color: #e5eff5; }   /* Student is Blue */
 
 .brand-logo-wrap {
-  width:420px;
-  height: 420px;
+  width: min(82%, 420px);
+  height: min(72vh, 420px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,6 +33,7 @@
   object-fit: contain;
   object-position: center;
   display: block;
+  border: 2px solid red;
 }
 
 .login-right-panel {
