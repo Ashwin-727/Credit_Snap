@@ -11,7 +11,9 @@ import StudLayout from './Pages/stud_layout';
 import StudDashboard from './Pages/stud_Dashboard';
 import StudCanteens from './Pages/stud_Canteens';
 import StudProfile from './Pages/stud_profile';
-import StudHistory from './Pages/stud_history'; // <-- Added!
+import StudHistory from './Pages/stud_history'; 
+import ChangePassword from './Pages/ChangePassword'; // <-- ADDED THIS IMPORT
+
 // Added New Student Pages
 import StudViewDebts from './Pages/stud_ViewDebts'; 
 import StudAboutUs from './Pages/stud_Aboutus';
@@ -41,8 +43,9 @@ export default function App() {
           <Route path="dashboard" element={<StudDashboard />} />
           <Route path="canteens" element={<StudCanteens />} />
           <Route path="profile" element={<StudProfile />} />
-          <Route path="history" element={<StudHistory />} /> 
+          <Route path="history" element={<StudHistory />} />
           <Route path="help" element={<StudentHelp />} />
+          <Route path="change-password" element={<ChangePassword />} /> {/* <-- ADDED THIS ROUTE */}
           
           {/* New Student Routes */}
           <Route path="debts" element={<StudViewDebts />} /> 
