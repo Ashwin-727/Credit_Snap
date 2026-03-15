@@ -1,7 +1,7 @@
-import StudDashboard from './Pages/stud_Dashboard';
+import Owneranalytics from './Pages/Owner_analysis';
 
 export default function App() {
   return (
-    <StudDashboard />
+    <Owneranalytics />
   )
 }
