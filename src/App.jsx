@@ -12,7 +12,7 @@ import StudDashboard from './Pages/stud_Dashboard';
 import StudCanteens from './Pages/stud_Canteens';
 import StudProfile from './Pages/stud_profile';
 import StudHistory from './Pages/stud_history'; 
-import ChangePassword from './Pages/ChangePassword'; // <-- ADDED THIS IMPORT
+import ChangePassword from './Pages/ChangePassword';
 
 // Added New Student Pages
 import StudViewDebts from './Pages/stud_ViewDebts'; 
@@ -27,6 +27,10 @@ import OwnerActiveDebts from './Pages/owner_ActiveDebts';
 import Ownerhistory from './Pages/owner_history';
 import Owneranalytics from './Pages/owner_analysis';
 import Ownerhelp from './Pages/owner_help';
+
+// Your new Owner Dashboard
+import CreditSnapDashboard from './Pages/owner_dashboard';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -38,26 +42,27 @@ export default function App() {
 
         {/* --- Protected Student Routes --- */}
         <Route path="/student" element={<StudLayout />}>
-          {/* Automatically redirects /student to /student/dashboard */}
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<StudDashboard />} />
           <Route path="canteens" element={<StudCanteens />} />
           <Route path="profile" element={<StudProfile />} />
           <Route path="history" element={<StudHistory />} />
           <Route path="help" element={<StudentHelp />} />
-          <Route path="change-password" element={<ChangePassword />} /> {/* <-- ADDED THIS ROUTE */}
+          <Route path="change-password" element={<ChangePassword />} />
           
-          {/* New Student Routes */}
           <Route path="debts" element={<StudViewDebts />} /> 
           <Route path="about" element={<StudAboutUs />} />
-          {/* <Route path="help" element={<StudHelp />} /> */}
-
         </Route>
 
         {/* --- Protected Owner Routes --- */}
         <Route path="/owner" element={<OwnerLayout />}>
-          {/* Automatically redirects /owner to /owner/editmenu */}
-          <Route index element={<Navigate to="editmenu" replace />} />
+          {/* Automatically redirects /owner to your new dashboard */}
+          <Route index element={<Navigate to="dashboard" replace />} />
+          
+          {/* Your Owner Dashboard */}
+          <Route path="dashboard" element={<CreditSnapDashboard />} />
+
+          {/* Team's other Owner pages */}
           <Route path="editmenu" element={<OwnerEditMenu />} />
           <Route path="profile" element={<OwnerProfile />} />
           <Route path="debts" element={<OwnerActiveDebts/>}/>

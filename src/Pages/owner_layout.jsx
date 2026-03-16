@@ -46,7 +46,7 @@ export default function OwnerLayout() {
 
           <nav className="mt-4 flex flex-col gap-2">
             
-            <div onClick={() => navigate('/canteen/dashboard')} className={`mx-2 py-3 px-2 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${isActive('dashboard') ? 'bg-[#eab308] text-[#1e293b] shadow-lg' : 'text-gray-300 hover:text-white opacity-70'}`}>
+            <div onClick={() => navigate('/owner/dashboard')} className={`mx-2 py-3 px-2 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${isActive('dashboard') ? 'bg-[#eab308] text-[#1e293b] shadow-lg' : 'text-gray-300 hover:text-white opacity-70'}`}>
               <Home className={`w-6 h-6 transition-all duration-300 ${isSidebarOpen ? 'mb-1' : ''}`} />
               {isSidebarOpen && <span className="text-sm font-semibold whitespace-nowrap">Home</span>}
             </div>
