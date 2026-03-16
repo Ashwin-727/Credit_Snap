@@ -83,10 +83,10 @@ export default function OwnerHistory() {
 
   return (
     <div className="p-8">
-      {/* Action Bar: Search & Filters */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 relative z-20">
+      {/* Action Bar: Search & Filters - REMOVED z-20 so it stops fighting the header! */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         
-        <div className="flex items-center bg-white border border-[#D9D9D9] rounded-full px-5 py-2.5 flex-1 max-w-lg shadow-sm">
+        <div className="flex items-center bg-white border border-[#D9D9D9] rounded-full px-5 py-2.5 flex-1 max-w-lg shadow-sm focus-within:border-[#eab308] transition-colors">
           <Search className="w-5 h-5 text-gray-400" />
           <input 
             type="text" 
@@ -127,7 +127,7 @@ export default function OwnerHistory() {
                   </div>
                 </div>
                 
-                <button onClick={() => {setFilterAmount({min:'', max:''}); setFilterDate({start:'', end:''});}} className="text-xs text-orange-600 hover:underline w-full text-center">Clear Filters</button>
+                <button onClick={() => {setFilterAmount({min:'', max:''}); setFilterDate({start:'', end:''});}} className="cursor-pointer text-xs text-orange-600 hover:underline w-full text-center">Clear Filters</button>
               </div>
             )}
           </div>
@@ -139,12 +139,12 @@ export default function OwnerHistory() {
             </button>
             {isSortOpen && (
               <div className="absolute top-12 right-0 w-48 bg-white border border-gray-200 shadow-xl rounded-xl p-2 z-50 flex flex-col">
-                <button onClick={() => setSortConfig('date_desc')} className={`text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Newest First)</button>
-                <button onClick={() => setSortConfig('date_asc')} className={`text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Oldest First)</button>
+                <button onClick={() => setSortConfig('date_desc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Newest First)</button>
+                <button onClick={() => setSortConfig('date_asc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Oldest First)</button>
                 <div className="border-t my-1"></div>
-                <button onClick={() => setSortConfig('amount_desc')} className={`text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (High to Low)</button>
-                <button onClick={() => setSortConfig('amount_asc')} className={`text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (Low to High)</button>
-                <button onClick={() => setSortConfig('')} className="text-left px-3 py-2 text-xs text-gray-400 hover:text-gray-600 mt-1">Clear Sort</button>
+                <button onClick={() => setSortConfig('amount_desc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (High to Low)</button>
+                <button onClick={() => setSortConfig('amount_asc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (Low to High)</button>
+                <button onClick={() => setSortConfig('')} className="cursor-pointer text-left px-3 py-2 text-xs text-gray-400 hover:text-gray-600 mt-1">Clear Sort</button>
               </div>
             )}
           </div>
@@ -152,8 +152,8 @@ export default function OwnerHistory() {
         </div>
       </div>
 
-      {/* History List */}
-      <div className="space-y-4 relative z-10">
+      {/* History List - REMOVED z-10 so it stops fighting the header! */}
+      <div className="space-y-4">
         {processedData.length === 0 ? (
            <div className="bg-white p-12 rounded-2xl shadow-sm border border-[#D9D9D9] flex flex-col items-center justify-center min-h-[400px]">
              <History className="w-16 h-16 text-gray-300 mb-4" />

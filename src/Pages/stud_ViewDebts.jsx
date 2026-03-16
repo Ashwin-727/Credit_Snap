@@ -69,7 +69,7 @@ const DebtCard = ({ data }) => {
               Debt: {data.currentDebt}/{data.limit}
             </p>
             <button 
-              className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${data.currentDebt > 0 ? 'bg-[#5b52d6] hover:bg-[#4a42b0] text-white' : 'bg-green-100 text-green-700 cursor-default'}`}
+              className={`cursor-pointer px-4 py-1 rounded-md text-sm font-medium transition-colors ${data.currentDebt > 0 ? 'bg-[#5b52d6] hover:bg-[#4a42b0] text-white' : 'bg-green-100 text-green-700 cursor-default'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 if(data.currentDebt > 0) alert(`Clearing debt for ${data.name}`);
@@ -190,7 +190,9 @@ export default function ViewDebts() {
   return (
     <>
       <style>{styles}</style>
-      <main className="p-8 overflow-y-auto w-full h-full pb-32 bg-gray-50 min-h-screen">
+      
+      {/* THE FIX: Removed overflow-y-auto, min-h-screen, and h-full */}
+      <main className="p-8 pb-32 w-full">
         
         {/* Top Controls (Search, Filter, Sort) exactly matched to Canteens */}
         <div className="controls-row">
