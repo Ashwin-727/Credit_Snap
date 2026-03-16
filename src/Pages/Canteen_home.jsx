@@ -117,9 +117,20 @@ export default function CanteenHome() {
           </div>
         </div>
 
-        {/* Giant Centered Text (Visible no matter what the toggle state is right now) */}
+        {/* Dynamic Centered Text */}
         <div className="empty-state-wrapper">
-          <h2 className="empty-text">No Current Orders</h2>
+        {isCanteenOpen ? (
+            /* Shows when toggle is ON (Green) */
+            <h2 className="empty-text">No Current Orders</h2>
+        ) : (
+            /* Shows when toggle is OFF (Red) */
+            <div style={{ textAlign: 'center' }}>
+            <h2 className="empty-text" style={{ color: '#D00000' }}>Canteen Closed</h2>
+            <p style={{ fontSize: '24px', color: '#666', marginTop: '10px' }}>
+                Toggle status to "Accepting Orders" to go live
+            </p>
+            </div>
+        )}
         </div>
 
       </div>

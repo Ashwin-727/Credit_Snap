@@ -5,7 +5,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './Pages/Login';
 import Signup from './Pages/Signup';
 import ForgotPassword from './Pages/ForgotPassword';
-
 // --- Student Pages ---
 import StudLayout from './Pages/stud_layout';
 import StudDashboard from './Pages/stud_Dashboard';
@@ -54,6 +53,7 @@ export default function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           
           {/* Your Owner Dashboard */}
+          
           <Route path="dashboard" element={<CreditSnapDashboard />} />
 
           {/* Team's other Owner pages */}

@@ -116,10 +116,21 @@ export default function CreditSnapDashboard() {
         </div>
       </div>
 
-      {/* Giant Centered Text */}
-      <div className="empty-state-wrapper">
-        <h2 className="empty-text">No Current Orders</h2>
-      </div>
+      {/* Dynamic Centered Text */}
+        <div className="empty-state-wrapper">
+          {isCanteenOpen ? (
+            /* What to show when toggle is GREEN */
+            <h2 className="empty-text">No Current Orders</h2>
+          ) : (
+            /* What to show when toggle is RED */
+            <div style={{ textAlign: 'center' }}>
+              <h2 className="empty-text" style={{ color: 'rgb(0, 0, 0)' }}>Canteen Closed</h2>
+              <p style={{ fontSize: '22px', color: '#666', marginTop: '10px' }}>
+                Turn on the status to start receiving orders
+              </p>
+            </div>
+          )}
+        </div>
 
     </div>
   );
