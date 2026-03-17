@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck } from 'lucide-react';
+import { Lock, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useLocation } from 'react-router-dom'; 
 
 export default function ChangePassword() {
-  const location = useLocation(); // <-- ADD THIS
-  const isOwner = location.pathname.includes('/owner'); // <-- ADD THIS
+  const location = useLocation(); 
+  const isOwner = location.pathname.includes('/owner'); 
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
+
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -28,31 +32,26 @@ export default function ChangePassword() {
     setError('');
     setSuccess('');
 
-    // 1. Basic Validation: Check for empty fields
     if (!passwords.currentPassword || !passwords.newPassword || !passwords.confirmPassword) {
       setError('Please fill in all fields.');
       return;
     }
 
-    // 2. NEW FIX: Prevent using the same password
     if (passwords.currentPassword === passwords.newPassword) {
       setError('New password cannot be the same as the current password.');
       return;
     }
 
-    // 3. Length check
     if (passwords.newPassword.length < 8) {
       setError('New password must be at least 8 characters long.');
       return;
     }
 
-    // 4. Match check
     if (passwords.newPassword !== passwords.confirmPassword) {
       setError('New passwords do not match.');
       return;
     }
 
-    // TODO: Send data to your backend API here
     try {
       setSuccess('Password updated successfully!');
       setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' }); 
@@ -97,13 +96,19 @@ export default function ChangePassword() {
                 <Lock className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="password"
+                type={showCurrent ? "text" : "password"}
                 name="currentPassword"
                 value={passwords.currentPassword}
                 onChange={handleChange}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
                 placeholder="Enter current password"
               />
+              <div 
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-400 hover:text-gray-600"
+                onClick={() => setShowCurrent(!showCurrent)}
+              >
+                {showCurrent ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </div>
             </div>
           </div>
 
@@ -115,13 +120,19 @@ export default function ChangePassword() {
                 <Lock className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="password"
+                type={showNew ? "text" : "password"}
                 name="newPassword"
                 value={passwords.newPassword}
                 onChange={handleChange}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
                 placeholder="Enter new password"
               />
+              <div 
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-400 hover:text-gray-600"
+                onClick={() => setShowNew(!showNew)}
+              >
+                {showNew ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </div>
             </div>
           </div>
 
@@ -133,13 +144,19 @@ export default function ChangePassword() {
                 <Lock className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="password"
+                type={showConfirm ? "text" : "password"}
                 name="confirmPassword"
                 value={passwords.confirmPassword}
                 onChange={handleChange}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition"
                 placeholder="Confirm new password"
               />
+              <div 
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-400 hover:text-gray-600"
+                onClick={() => setShowConfirm(!showConfirm)}
+              >
+                {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </div>
             </div>
           </div>
 
@@ -148,8 +165,8 @@ export default function ChangePassword() {
            type="submit"
            className={`w-full text-white font-bold py-3 rounded-xl hover:shadow-md transition duration-200 ${
            isOwner 
-            ? 'bg-[#192f60]         hover:bg-[#152142]' // <-- Color if it's the Owner
-           : 'bg-[#f97316] hover:bg-orange-600' // <-- Color if it's the Student
+            ? 'bg-[#D89715] hover:bg-[#C28813]' // <-- Changed to your new color!
+           : 'bg-[#f97316] hover:bg-orange-600' 
            }`}
             >
            Update Password
