@@ -60,7 +60,7 @@ export default function App() {
         {/* --- Protected Owner Routes --- */}
         <Route path="/owner" element={<OwnerLayout />}>
           {/* Automatically redirects /owner to editmenu since dashboard is disabled for now */}
-          <Route index element={<Navigate to="editmenu" replace />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
           
           {/* 🚨 Temporarily disabled to fix the white screen crash! */}
           <Route path="dashboard" element={<CreditSnapDashboard />} />
