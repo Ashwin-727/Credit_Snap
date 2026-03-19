@@ -1,13 +1,13 @@
 const Order = require('../models/ordersModel');
 const User = require('../models/userModel');
-// const Debt = require('../models/debtModel');
+const Debt = require('../models/debtModel');
 
-// 🍕 STUDENT: Places order from /canteens
+// 🍕 STUDENT: Place order (from /canteens page)
 exports.createOrder = async (req, res) => {
   try {
     const { canteenId, items, totalAmount } = req.body;
     const newOrder = await Order.create({
-      student: req.user.id,
+      student: req.user.id, // From protect middleware
       canteen: canteenId,
       items,
       totalAmount
@@ -18,10 +18,21 @@ exports.createOrder = async (req, res) => {
   }
 };
 
-// 📊 OWNER: Fetches orders for /dashboard
+// 👤 STUDENT: View personal history (for /student/dashboard)
+exports.getStudentOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ student: req.user.id })
+      .populate('canteen', 'name')
+      .sort('-createdAt');
+    res.status(200).json({ status: 'success', data: orders });
+  } catch (error) {
+    res.status(404).json({ status: 'fail', message: error.message });
+  }
+};
+
+// 📊 OWNER: View incoming orders (for /dashboard)
 exports.getOwnerOrders = async (req, res) => {
   try {
-    // req.user.managedCanteen must be set for the Owner user in DB
     const orders = await Order.find({ canteen: req.user.managedCanteen })
       .populate('student', 'name rollNo phone')
       .sort('-createdAt');
@@ -31,19 +42,7 @@ exports.getOwnerOrders = async (req, res) => {
   }
 };
 
-// 👤 STUDENT: Fetches their own orders for /student/dashboard
-exports.getStudentOrders = async (req, res) => {
-  try {
-    const orders = await Order.find({ student: req.user.id })
-      .populate('canteen', 'name')
-      .sort('-createdAt');
-    res.status(200).json({ status: 'success', data: orders });
-  } catch (error) {
-    res.status(400).json({ status: 'fail', message: error.message });
-  }
-};
-
-// ✅ OWNER: Accepts order on /dashboard (INCREASES DEBT)
+// ✅ OWNER: Update status (Increases Student Debt if accepted)
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId, status } = req.body;
@@ -51,18 +50,18 @@ exports.updateOrderStatus = async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Logic for Debt Increase
+    // Core Logic: Increase debt ONLY when moving from pending to accepted
     if (status === 'accepted' && order.status === 'pending') {
       const student = await User.findById(order.student);
 
       if (student.totalDebt + order.totalAmount > student.limit) {
-        return res.status(400).json({ message: 'Insufficient credit limit!' });
+        return res.status(400).json({ message: 'Student credit limit exceeded!' });
       }
 
-      // Update Student Global Debt
+      // 1. Update Student Global Debt
       await User.findByIdAndUpdate(order.student, { $inc: { totalDebt: order.totalAmount } });
 
-      // Update Canteen-specific Debt record
+      // 2. Update Canteen-specific Debt
       await Debt.findOneAndUpdate(
         { student: order.student, canteen: order.canteen },
         { $inc: { amountOwed: order.totalAmount } },
