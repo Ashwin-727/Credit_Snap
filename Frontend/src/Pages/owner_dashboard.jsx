@@ -1,89 +1,68 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
-export default function CreditSnapDashboard() {
-  // 1. Canteen Open/Closed State Memory
+export default function OwnerDashboard() {
+  // --- 1. STATES ---
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isCanteenOpen, setIsCanteenOpen] = useState(() => {
     const saved = localStorage.getItem('canteenStatus');
     return saved === 'true'; 
   });
 
+  // --- 2. FETCH ORDERS FROM DATABASE ---
+  const fetchOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/api/orders/my-orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.status === 'success') {
+        setOrders(response.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching owner orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('canteenStatus', isCanteenOpen);
   }, [isCanteenOpen]);
 
-  // 2. Orders State Memory
-  const [orders, setOrders] = useState(() => {
-    // Check if we have saved orders in the browser first!
-    const savedOrders = localStorage.getItem('canteenOrders');
-    if (savedOrders) {
-      return JSON.parse(savedOrders); // Convert the saved text back into an array
-    }
-    // If nothing is saved yet, load these defaults
-    return [
-      {
-        id: 1,
-        name: "Sai Chaitanya",
-        phone: "+91xxxxxxxxx, Hall 3",
-        time: "12:30 AM",
-        items: ["Paneer Fried Rice x1", "Cold Coffee x1"], 
-        price: "₹80",
-        type: "pending" 
-      },
-      {
-        id: 2,
-        name: "Sai Shreyas",
-        phone: "+91xxxxxxxxx, Hall 12, A513",
-        time: "12:37 AM",
-        items: ["Cheese Maggie x1", "Chai x1"], 
-        price: "₹60",
-        type: "pending" 
-      },
-      {
-        id: 3,
-        name: "Ram Charan",
-        phone: "+91xxxxxxxxx, Hall 5, C204",
-        time: "12:42 AM",
-        items: ["Chicken Biryani x1", "Thumbs Up x1"],
-        price: "₹150",
-        type: "pending" 
-      },
-      {
-        id: 4,
-        name: "Rahul Kumar",
-        phone: "+91xxxxxxxxx, Hall 1, D102",
-        time: "12:15 AM",
-        items: ["Chicken Roll x1", "Coke x1"],
-        price: "₹90",
-        type: "debt" 
+  // --- 3. ACTIONS ---
+  const handleUpdateStatus = async (orderId, newStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.patch('http://localhost:5000/api/orders/update-status', 
+        { orderId, status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.status === 'success') {
+        fetchOrders();
       }
-    ];
-  });
-
-  // Save the orders array to browser memory EVERY time it changes
-  useEffect(() => {
-    localStorage.setItem('canteenOrders', JSON.stringify(orders));
-  }, [orders]);
-
-  // 3. Functions to handle button clicks
-  const removeOrder = (orderIdToRemove) => {
-    setOrders(orders.filter(order => order.id !== orderIdToRemove));
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update order");
+    }
   };
 
-  const acceptOrder = (orderIdToAccept) => {
-    setOrders(prevOrders => {
-      const orderToMove = prevOrders.find(order => order.id === orderIdToAccept);
-      if (!orderToMove) return prevOrders;
-      
-      const updatedOrder = { ...orderToMove, type: 'debt' };
-      const remainingOrders = prevOrders.filter(order => order.id !== orderIdToAccept);
-      
-      return [...remainingOrders, updatedOrder];
-    });
+  const removeOrder = (orderId) => {
+    // This local filter mimics the old UI's "remove" behavior for rejected/closed items
+    setOrders(orders.filter(order => order._id !== orderId));
   };
 
   const clearAllOrders = () => {
-    // ONLY clears orders that have been moved to the 'debt' section
-    setOrders(orders.filter(order => order.type !== 'debt'));
+    // Mimics the old UI logic: clears everything that is already "accepted" (debt) or rejected
+    setOrders(orders.filter(order => order.status === 'pending'));
   };
 
   return (
@@ -151,7 +130,6 @@ export default function CreditSnapDashboard() {
         input:checked + .slider { background-color: #38b000; }
         input:checked + .slider:before { transform: translateX(30px); }
 
-        /* --- EMPTY STATE TEXT --- */
         .empty-state-wrapper {
           flex-grow: 1; 
           display: flex;
@@ -168,7 +146,6 @@ export default function CreditSnapDashboard() {
           letter-spacing: -1px;
         }
 
-        /* --- ORDER CARDS --- */
         .card-container {
           display: flex;
           flex-direction: column;
@@ -312,8 +289,11 @@ export default function CreditSnapDashboard() {
         </div>
       </div>
 
-      {/* MAIN LOGIC CONTROLLER */}
-      {!isCanteenOpen ? (
+      {loading ? (
+         <div className="empty-state-wrapper">
+            <p style={{ fontSize: '22px', color: '#666' }}>Connecting to Server...</p>
+         </div>
+      ) : !isCanteenOpen ? (
         <div className="empty-state-wrapper">
           <div style={{ textAlign: 'center' }}>
             <h2 className="empty-text">Canteen Closed</h2>
@@ -334,34 +314,38 @@ export default function CreditSnapDashboard() {
           </div>
 
           {orders.map((order) => (
-            <div className="order-card" key={order.id}>
-              {/* Show X button only if it's a debt order */}
-              {order.type === 'debt' && (
-                <button className="close-x" onClick={() => removeOrder(order.id)}>✕</button>
+            <div className="order-card" key={order._id}>
+              {/* Show X button only if it's already processed (debt or rejected) */}
+              {order.status !== 'pending' && (
+                <button className="close-x" onClick={() => removeOrder(order._id)}>✕</button>
               )}
               
               <div className="info-col">
-                <h2>{order.name}</h2>
-                <p>Ph no. {order.phone}</p>
-                <p>Time: {order.time}</p>
+                <h2>{order.student?.name || "Unknown Student"}</h2>
+                <p>Roll No: {order.student?.rollNo || "N/A"}</p>
+                <p>Time: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
               
               <div className="items-col">
                 {order.items.map((item, index) => (
-                  <span className="item-text" key={index}>{item}</span>
+                  <span className="item-text" key={index}>{item.name} x{item.quantity}</span>
                 ))}
               </div>
               
               <div className="action-col">
-                <span className="price" style={order.type === 'debt' ? { marginRight: '30px' } : {}}>{order.price}</span>
+                <span className="price" style={order.status !== 'pending' ? { marginRight: '30px' } : {}}>
+                    ₹{order.totalAmount}
+                </span>
                 
-                {order.type === 'pending' ? (
+                {order.status === 'pending' ? (
                   <div className="btn-group">
-                    <button className="btn btn-accept" onClick={() => acceptOrder(order.id)}>Accept</button>
-                    <button className="btn btn-reject" onClick={() => removeOrder(order.id)}>Reject</button>
+                    <button className="btn btn-accept" onClick={() => handleUpdateStatus(order._id, 'accepted')}>Accept</button>
+                    <button className="btn btn-reject" onClick={() => handleUpdateStatus(order._id, 'rejected')}>Reject</button>
                   </div>
                 ) : (
-                  <span className="debt-badge">Added to debt</span>
+                  <span className="debt-badge">
+                    {order.status === 'accepted' ? 'Added to debt' : 'Rejected'}
+                  </span>
                 )}
               </div>
             </div>
