@@ -1,5 +1,6 @@
 const Canteen = require('../models/canteenModel');
 const MenuItem = require('../models/menuItemModel');
+const User = require('../models/userModel');
 
 // ==========================================
 // CANTEEN SETTINGS (For the Dashboard)
@@ -70,7 +71,9 @@ exports.deleteMenuItem = async (req, res) => {
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
-// In canteenController.js
+// controllers/canteenController.js
+
+// Get my canteen (For the Owner Dashboard)
 exports.getMyCanteen = async (req, res) => {
   try {
     // Assuming `req.user` is populated by `protect` middleware
@@ -81,5 +84,20 @@ exports.getMyCanteen = async (req, res) => {
     res.status(200).json({ status: 'success', data: { canteen } });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
+  }
+};
+
+// Get all canteens
+exports.getAllCanteens = async (req, res) => {
+  try {
+    // We fetch all users who are registered as owners
+    const canteens = await User.find({ role: 'owner' }).select('name status timings');
+    
+    res.status(200).json({
+      status: 'success',
+      data: canteens
+    });
+  } catch (err) {
+    res.status(404).json({ status: 'fail', message: err.message });
   }
 };
