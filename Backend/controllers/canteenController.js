@@ -70,3 +70,17 @@ exports.deleteMenuItem = async (req, res) => {
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
+// controllers/canteenController.js
+exports.getAllCanteens = async (req, res) => {
+  try {
+    // We fetch all users who are registered as owners
+    const canteens = await User.find({ role: 'owner' }).select('name status timings');
+    
+    res.status(200).json({
+      status: 'success',
+      data: canteens
+    });
+  } catch (err) {
+    res.status(404).json({ status: 'fail', message: err.message });
+  }
+};

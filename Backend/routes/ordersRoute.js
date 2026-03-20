@@ -14,5 +14,4 @@ router.get('/my-active-orders', ordersController.getStudentOrders);
 // Owner Endpoints
 router.get('/my-orders', ordersController.getOwnerOrders);
 router.patch('/update-status', ordersController.updateOrderStatus);
-
 module.exports = router;
