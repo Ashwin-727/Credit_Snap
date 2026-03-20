@@ -1,0 +1,71 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import './Login.css';
+
+const VerifyEmail = () => {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const [status, setStatus] = useState('Verifying your email...');
+  const called = useRef(false);
+
+  useEffect(() => {
+    const verifyToken = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/users/verifyEmail/${token}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          setStatus('Email verified successfully! Logging you in...');
+          
+          // Save the token and user data to the browser's memory
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.data.user));
+
+          // Wait a brief moment so they can read the success message
+          setTimeout(() => {
+            if (data.data.user.role === 'student') {
+              navigate('/student/dashboard');
+            } else if (data.data.user.role === 'owner') {
+              navigate('/owner/editmenu');
+            }
+          }, 2000);
+        } else {
+          setStatus('Verification failed: ' + data.message);
+        }
+      } catch (error) {
+        setStatus('Cannot connect to the backend server to verify email.');
+      }
+    };
+
+    if (token && !called.current) {
+      called.current = true;
+      verifyToken();
+    }
+  }, [token, navigate]);
+
+  return (
+    <div className="login-page">
+      <div className="login-right-panel" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="form-container" style={{ textAlign: 'center' }}>
+          <h1 className="login-heading">Email Verification</h1>
+          <p style={{ margin: '20px 0', fontSize: '1.2rem', color: '#333' }}>
+            {status}
+          </p>
+          {status.includes('failed') && (
+            <button className="primary-login-btn btn-blue" onClick={() => navigate('/signup')}>
+              Back to Signup
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default VerifyEmail;

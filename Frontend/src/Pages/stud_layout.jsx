@@ -11,6 +11,13 @@ export default function StudLayout() {
   const [notifications, setNotifications] = useState([]); 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      setUserProfile(JSON.parse(userStr));
+    }
+  }, []);
   
   // --- NEW: Sidebar Toggle State ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);

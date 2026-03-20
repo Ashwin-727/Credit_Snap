@@ -7,16 +7,35 @@ export default function StudProfile() {
   
   // 1. Master State
   const [studentInfo, setStudentInfo] = useState({
-    name: "Shreyas",
-    email: "Shreyas@iitk.ac.in",
-    phone: "91+XXXXXXXXXX",
-    rollNo: "24XXXX",
-    roomNo: "A-513 , Hall 12"
+    name: "Loading...",
+    email: "Loading...",
+    phone: "Loading...",
+    rollNo: "Loading...",
+    hallNo: "Not Provided",
+    roomNo: "Not Provided"
   });
 
   // 2. Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(studentInfo);
+
+  // Fetch actual user data on load
+  React.useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const realData = {
+        name: user.name || "N/A",
+        email: user.email || "N/A",
+        phone: user.phoneNo || "N/A",
+        rollNo: user.rollNo || "N/A",
+        hallNo: user.hallNo || "Not Provided",
+        roomNo: user.roomNo || "Not Provided"
+      };
+      setStudentInfo(realData);
+      setEditForm(realData);
+    }
+  }, []);
 
   // 3. Handlers
   const handleEditClick = () => {
@@ -82,6 +101,15 @@ export default function StudProfile() {
             <span className={isEditing ? "text-gray-500" : ""}>{studentInfo.rollNo}</span>
           </div>
           
+          <div className="flex items-center">
+            <span className="w-40 font-medium shrink-0">Hall No :</span>
+            {isEditing ? (
+              <input type="text" name="hallNo" value={editForm.hallNo} onChange={handleChange} className="bg-white border border-gray-300 rounded-lg px-3 py-1 w-full max-w-sm outline-none focus:border-[#0f172a] shadow-sm transition" />
+            ) : (
+              <span>{studentInfo.hallNo}</span>
+            )}
+          </div>
+
           <div className="flex items-center">
             <span className="w-40 font-medium shrink-0">Room No :</span>
             {isEditing ? (
