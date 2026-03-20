@@ -35,13 +35,26 @@ import CreditSnapDashboard from './Pages/owner_dashboard';
 import OwnerAboutUs from './Pages/owner_AboutUs';
 
 export default function App() {
-  // A simple component to check for a token before allowing access
-  const ProtectedRoute = ({ children }) => {
+  // A robust component to check for a token AND the correct role before allowing access
+  const RoleProtectedRoute = ({ children, allowedRole }) => {
     const token = localStorage.getItem('token');
-    if (!token) {
-      // If there's no token, kick them back to login!
+    const userStr = localStorage.getItem('user');
+
+    if (!token || !userStr) {
+      // If there's no token or user data, kick them back to login
       return <Navigate to="/" replace />;
     }
+
+    try {
+      const user = JSON.parse(userStr);
+      if (user.role !== allowedRole) {
+        // If a student tries to access owner pages (or vice versa), kick them to their own dashboard!
+        return <Navigate to={`/${user.role}/dashboard`} replace />;
+      }
+    } catch (e) {
+      return <Navigate to="/" replace />;
+    }
+
     return children;
   };
 
@@ -54,7 +67,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* --- Protected Student Routes --- */}
-        <Route path="/student" element={<ProtectedRoute><StudLayout /></ProtectedRoute>}>
+        <Route path="/student" element={<RoleProtectedRoute allowedRole="student"><StudLayout /></RoleProtectedRoute>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<StudDashboard />} />
           <Route path="canteens" element={<StudCanteens />} />
@@ -68,7 +81,7 @@ export default function App() {
         </Route>
 
         {/* --- Protected Owner Routes --- */}
-        <Route path="/owner" element={<ProtectedRoute><OwnerLayout /></ProtectedRoute>}>
+        <Route path="/owner" element={<RoleProtectedRoute allowedRole="owner"><OwnerLayout /></RoleProtectedRoute>}>
           {/* Automatically redirects /owner to editmenu since dashboard is disabled for now */}
           <Route index element={<Navigate to="dashboard" replace />} />
 

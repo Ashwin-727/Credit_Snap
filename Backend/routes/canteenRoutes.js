@@ -4,8 +4,9 @@ const userController = require('../controllers/userController');
 const router = express.Router();
 router.use(userController.protect);
 // 🏪 Canteen Operations
+router.get('/', canteenController.getAllCanteens); // Get all canteens for Students
 router.get('/my', canteenController.getMyCanteen);
-router.post('/', canteenController.createCanteen); 
+router.post('/', canteenController.createCanteen);  
 router.put('/:canteenId/status', canteenController.updateCanteenStatus); // For the Open/Close switch
 
 // 🍔 Menu Operations

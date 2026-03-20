@@ -59,7 +59,10 @@ export default function OwnerDashboard() {
   // 4. API ACTIONS
   // ==========================================
   const toggleStatus = async () => {
-    if (!canteen) return;
+    if (!canteen) {
+      alert("⚠️ ERROR: Cannot toggle status! Your Owner account does not have a Canteen registered in the MongoDB database yet. Please run the backend fix script.");
+      return;
+    }
     try {
       const newStatus = !isCanteenOpen;
       const token = localStorage.getItem('token');

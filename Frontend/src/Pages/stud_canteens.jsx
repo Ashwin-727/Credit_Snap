@@ -17,21 +17,19 @@ const StudentCanteens = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
 
-  // --- 2. FETCH CANTEENS (OWNERS) FROM BACKEND ---
+  // --- 2. FETCH REAL CANTEENS FROM BACKEND ---
   useEffect(() => {
     const fetchCanteens = async () => {
       try {
-        // This hits your backend which should return users with role: 'owner'
-        const response = await axios.get('http://localhost:5000/api/users/canteens');
+        const token = localStorage.getItem('token');
+        // 🏆 Hitting the new backend route that returns ACTUAL Canteen objects (with real _id)
+        const response = await axios.get('http://localhost:5000/api/canteens', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         
         if (response.data.status === 'success') {
-          // Map backend data to match the UI needs (Timings/Status)
-          const formatted = response.data.data.map(c => ({
-            ...c,
-            status: c.status || "Open", // Defaulting to Open as requested
-            timings: c.timings || "4:00 PM - 4:00 AM"
-          }));
-          setCanteensData(formatted);
+          // The backend already mapped name, status, and timings perfectly for us
+          setCanteensData(response.data.data);
         }
       } catch (err) {
         console.error("Error fetching canteens:", err);
@@ -42,14 +40,8 @@ const StudentCanteens = () => {
     fetchCanteens();
   }, []);
 
-  const menuData = [
-    { id: 1, name: "Plain Maggie", price: 25, type: "veg" },
-    { id: 2, name: "Plain Dosa", price: 50, type: "veg" },
-    { id: 3, name: "Cheese Maggie", price: 50, type: "veg" },
-    { id: 4, name: "Masala Maggie", price: 35, type: "veg" },
-    { id: 5, name: "Chicken Biryani", price: 120, type: "non-veg" },
-    { id: 6, name: "Veg Biryani", price: 60, type: "veg" },
-  ];
+  // --- INTEGRATED MENU STATE ---
+  const [menuData, setMenuData] = useState([]);
 
   // --- 3. INTEGRATION: PLACE DEBT REQUEST ---
   const handlePlaceDebtRequest = async () => {
@@ -57,9 +49,10 @@ const StudentCanteens = () => {
       const token = localStorage.getItem('token');
       
       const orderData = {
-        canteenId: selectedCanteen._id, // This will be 69bc3ae44c89e28e5c10ee60
+        canteenId: selectedCanteen._id,
         items: Object.entries(cart).map(([id, qty]) => {
-          const item = menuData.find(i => i.id === parseInt(id));
+          // Using strict string comparison since MongoDB _id is alphanumeric
+          const item = menuData.find(i => i._id === id);
           return { name: item.name, quantity: qty, price: item.price };
         }),
         totalAmount: getTotalCost()
@@ -79,8 +72,21 @@ const StudentCanteens = () => {
   };
 
   // --- 4. HELPER FUNCTIONS ---
-  const goToMenu = (canteen) => {
+  const goToMenu = async (canteen) => {
     if (canteen.status === "Closed") return;
+    
+    // Fetch live menu for this specific canteen!
+    try {
+      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`);
+      if (response.data.status === 'success') {
+        // Only show items the owner marked as available
+        setMenuData(response.data.data.menu.filter(item => item.isAvailable));
+      }
+    } catch (err) {
+      console.error("Failed to load live menu", err);
+      setMenuData([]); // Drop to empty array if fail
+    }
+
     setSelectedCanteen(canteen);
     setSearchQuery("");
     setStep('menu');
@@ -106,16 +112,16 @@ const StudentCanteens = () => {
 
   const getTotalCost = () => {
     return Object.entries(cart).reduce((total, [id, qty]) => {
-      const item = menuData.find(i => i.id === parseInt(id));
-      return total + (item.price * qty);
+      const item = menuData.find(i => i._id === id);
+      return total + (item ? item.price * qty : 0);
     }, 0);
   };
 
   const getCartSummaryText = () => {
     return Object.entries(cart).map(([id, qty]) => {
-      const item = menuData.find(i => i.id === parseInt(id));
-      return `${item.name} x${qty}`;
-    }).join(", ");
+      const item = menuData.find(i => i._id === id);
+      return item ? `${item.name} x${qty}` : "";
+    }).filter(Boolean).join(", ");
   };
 
   // --- 5. SEARCH & FILTER LOGIC ---
@@ -185,23 +191,25 @@ const StudentCanteens = () => {
 
         {step === 'menu' && (
           <div className="menu-grid">
-            {displayMenu.map(item => (
-              <div className="menu-card" key={item.id}>
+            {displayMenu.length > 0 ? displayMenu.map(item => (
+              <div className="menu-card" key={item._id}>
                 <div>
                   <h3 className="font-bold">{item.name}</h3>
                   <p className="text-blue-600 font-bold">₹{item.price}</p>
                 </div>
-                {!cart[item.id] ? (
-                  <button className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-bold" onClick={() => updateQuantity(item.id, 1)}>Order</button>
+                {!cart[item._id] ? (
+                  <button className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-bold" onClick={() => updateQuantity(item._id, 1)}>Order</button>
                 ) : (
                   <div className="flex items-center border rounded-full px-2 bg-gray-50">
-                    <button className="px-2 font-bold" onClick={() => updateQuantity(item.id, -1)}>-</button>
-                    <span className="px-4 font-bold">{cart[item.id]}</span>
-                    <button className="px-2 font-bold" onClick={() => updateQuantity(item.id, 1)}>+</button>
+                    <button className="px-2 font-bold" onClick={() => updateQuantity(item._id, -1)}>-</button>
+                    <span className="px-4 font-bold">{cart[item._id]}</span>
+                    <button className="px-2 font-bold" onClick={() => updateQuantity(item._id, 1)}>+</button>
                   </div>
                 )}
               </div>
-            ))}
+            )) : (
+              <div className="col-span-2 text-center text-gray-500 py-10 text-xl font-bold">No items available in this canteen currently!</div>
+            )}
           </div>
         )}
 
@@ -213,7 +221,8 @@ const StudentCanteens = () => {
               </thead>
               <tbody>
                 {Object.entries(cart).map(([id, qty]) => {
-                  const item = menuData.find(i => i.id === parseInt(id));
+                  const item = menuData.find(i => i._id === id);
+                  if (!item) return null;
                   return (
                     <tr key={id}>
                       <td>{item.name}</td>
