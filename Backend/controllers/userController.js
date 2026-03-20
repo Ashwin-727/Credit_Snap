@@ -6,7 +6,7 @@ const sendEmail = require('../utils/email');
 // 🛠️ HELPER FUNCTION: Generates the Token
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d' 
+    expiresIn: '30d'
   });
 };
 
@@ -14,7 +14,7 @@ const signToken = (id) => {
 exports.signup = async (req, res) => {
   try {
     console.log("Checkpoint 1: Request received from Thunder Client!");
-    
+
     const { name, email, password, role, rollNo, phoneNo, hallNo, roomNo } = req.body;
 
     // --- Check for existing users to return friendly error messages ---
@@ -44,7 +44,7 @@ exports.signup = async (req, res) => {
     console.log("Checkpoint 2: Attempting to save user to MongoDB...");
     // Generate a random token for email verification
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    
+
     const newUser = await User.create({
       name: name,
       email: email,
@@ -157,10 +157,10 @@ exports.login = async (req, res) => {
 
     // 3. If everything is ok, send token to client
     const token = signToken(user._id);
-    
+
     // 🔒 SECURITY FIX: Hide the password from the final output
     user.password = undefined;
-    
+
     res.status(200).json({
       status: 'success',
       token,
@@ -230,7 +230,7 @@ exports.forgotPassword = async (req, res) => {
     const resetURL = `http://localhost:5173/reset-password/${resetToken}`;
 
     const message = `Forgot your password? Click here to set a new one: ${resetURL}\nIf you didn't forget your password, please ignore this email!`;
-    
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #f97316;">Password Reset 🔑</h2>
@@ -277,8 +277,8 @@ exports.resetPassword = async (req, res) => {
       .update(req.params.token)
       .digest('hex');
 
-    const user = await User.findOne({ 
-      passwordResetToken: hashedToken, 
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
       passwordResetExpires: { $gt: Date.now() } // Token must not be expired!
     });
 
@@ -290,7 +290,7 @@ exports.resetPassword = async (req, res) => {
     user.password = req.body.password;
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
-    
+
     // Save the user (this will run the 'pre save' hook to encrypt the new password!)
     await user.save();
 
@@ -321,7 +321,7 @@ exports.updatePassword = async (req, res) => {
 
     // 3. If correct, update password to the new password
     user.password = req.body.newPassword;
-    
+
     // Save the user (this will run the 'pre save' hook to encrypt the new password cleanly!)
     await user.save();
 

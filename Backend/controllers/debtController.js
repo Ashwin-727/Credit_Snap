@@ -1,80 +1,145 @@
 const Debt = require('../models/debtModel');
-const sendEmail = require('../utils/sendEmail'); // This is Tejas's Nodemailer tool!
+const Order = require('../models/ordersModel'); // 👈 ADD THIS LINE
+const sendEmail = require('../utils/sendEmail');
 
-// 💰 DEDUCT DEBT LOGIC (Paid Offline)
-exports.payOffline = async (req, res) => {
+const Canteen = require('../models/canteenModel'); // 👈 Make sure Canteen is imported!
+
+// Get all active debts for the logged-in owner's canteen
+exports.getActiveDebts = async (req, res) => {
   try {
-    // 1. Find the specific Debt record using the ID sent by React
-    const debt = await Debt.findById(req.params.id);
+    // 1. Find the Canteen that belongs to the logged-in Owner
+    const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
     
-    if (!debt) {
-      throw new Error('Debt record not found!');
-    }
-
-    // 2. Subtract the amount paid from the 'amountOwed' field
-    debt.amountOwed = debt.amountOwed - req.body.amountPaid;
-
-    // Make sure debt doesn't go below 0!
-    if (debt.amountOwed < 0) {
-      debt.amountOwed = 0;
-    }
-
-    // 3. Save the updated amount to the database
-    await debt.save();
+    // 2. THE FIX: Search for debts using the Owner's ID (your friend's logic) 
+    // OR the Canteen ID (your logic) so nothing gets missed!
+    const activeDebts = await Debt.find({ 
+      $or: [
+        { canteen: req.user.id }, 
+        { canteen: myCanteen ? myCanteen._id : null }
+      ],
+      amountOwed: { $gt: 0 } 
+    }).populate('student', 'name rollNo phone email'); 
 
     res.status(200).json({
       status: 'success',
-      message: `Successfully deducted ₹${req.body.amountPaid}`,
-      data: { updatedDebt: debt.amountOwed }
+      data: activeDebts
     });
-
-  } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
   }
 };
 
-
-// 🔔 NOTIFY STUDENT LOGIC (Using Nodemailer)
-exports.notifyStudent = async (req, res) => {
+// 💰 2. DEDUCT DEBT LOGIC (Updates Debt, User, AND creates History Receipt)
+exports.payOffline = async (req, res) => {
   try {
-    // 1. Find the debt record. 
-    // .populate('student') is Mongoose magic! It takes the student's ID and 
-    // replaces it with their full profile (name, email) so we can use it!
-    const debt = await Debt.findById(req.params.id).populate('student');
+    const amountPaid = Number(req.body.amountPaid);
 
-    if (!debt || !debt.student) {
-      throw new Error('Debt or Student not found!');
+    if (!amountPaid || isNaN(amountPaid) || amountPaid <= 0) {
+      return res.status(400).json({ status: 'fail', message: 'Please enter a valid numeric amount greater than zero.' });
     }
 
-    // 2. We now have the exact student's email!
-    const studentEmail = debt.student.email;
+    const debt = await Debt.findById(req.params.id).populate('student');
+    
+    if (!debt) {
+      return res.status(404).json({ status: 'fail', message: 'Debt record not found!' });
+    }
 
-    // 3. Write the email
+    if (amountPaid > debt.amountOwed) {
+      return res.status(400).json({ status: 'fail', message: `Amount exceeds current debt! The maximum deduction is ₹${debt.amountOwed}.` });
+    }
+
+    // 1️⃣ Update the specific Canteen Debt Ticket
+    debt.amountOwed = debt.amountOwed - amountPaid;
+    await debt.save();
+
+    // 2️⃣ Update the Student's overall totalDebt in the Users collection
+    const student = debt.student; 
+    student.totalDebt = student.totalDebt - amountPaid;
+    if (student.totalDebt < 0) student.totalDebt = 0; 
+    await student.save();
+
+    // 3️⃣ NEW: Create a "Receipt" in the Orders collection for the History page!
+    await Order.create({
+      student: student._id,
+      canteen: debt.canteen,
+      items: [{
+        name: 'Offline Debt Payment', // Identifies this as a payment, not food!
+        quantity: 1,
+        price: amountPaid
+      }],
+      totalAmount: amountPaid,
+      status: 'accepted' // Automatically accepted so it gets the green tag in the UI
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: `Successfully deducted ₹${amountPaid} and recorded the transaction in History.`,
+      data: { 
+        canteenDebt: debt.amountOwed,
+        studentTotalDebt: student.totalDebt
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+// 🔔 3. NOTIFY STUDENT LOGIC (Using Nodemailer)
+exports.notifyStudent = async (req, res) => {
+  try {
+    // 1. Fetch debt and populate both student and canteen
+    const debt = await Debt.findById(req.params.id)
+      .populate('student', 'name email')
+      .populate('canteen', 'name'); 
+
+    // 2. Strict safety check for the core records
+    if (!debt || !debt.student) {
+      return res.status(404).json({ 
+        status: 'fail', 
+        message: 'Debt or Student record not found in the database!' 
+      });
+    }
+
+    // 3. Prevent sending emails for cleared debts
+    if (debt.amountOwed === 0) {
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: `${debt.student.name} has no pending debt.` 
+      });
+    }
+
+    // 4. THE FAIL-SAFE: Safely grab the Canteen Name
+    const canteenName = debt.canteen && debt.canteen.name 
+      ? debt.canteen.name 
+      : "our canteen";
+
+    // 5. Draft the email
     const emailMessage = `
       Hello ${debt.student.name},
       
-      This is a reminder from your Canteen Owner. 
-      Your current pending total on Credit Snap is ₹${debt.amountOwed}.
+      This is a friendly reminder from ${canteenName} regarding your Credit Snap account. 
+      Your current pending total at our shop is ₹${debt.amountOwed}.
       
       Please clear this amount at your earliest convenience.
       
       Thanks,
-      Credit Snap Team
+      ${canteenName} & The Credit Snap Team
     `;
 
-    // 4. Give the email to Tejas's Nodemailer tool to send it off!
+    // 6. Send the email
     await sendEmail({
-      email: studentEmail,
-      subject: 'Credit Snap: Pending Debt Reminder',
+      email: debt.student.email,
+      subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`, 
       message: emailMessage
     });
 
     res.status(200).json({
       status: 'success',
-      message: `Notification sent to ${debt.student.name}`
+      message: `Notification sent to ${debt.student.name} from ${canteenName}`
     });
 
   } catch (err) {
-    res.status(500).json({ status: 'fail', message: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
   }
 };
