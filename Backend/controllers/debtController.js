@@ -2,22 +2,30 @@ const Debt = require('../models/debtModel');
 const Order = require('../models/ordersModel'); // 👈 ADD THIS LINE
 const sendEmail = require('../utils/sendEmail');
 
-// 📡 1. FETCH ACTIVE DEBTS (Loads the UI List)
+const Canteen = require('../models/canteenModel'); // 👈 Make sure Canteen is imported!
+
+// Get all active debts for the logged-in owner's canteen
 exports.getActiveDebts = async (req, res) => {
   try {
-    // Make sure the user requesting this is actually logged in and assigned to a canteen
-    if (!req.user || !req.user.managedCanteen) {
-      throw new Error('Not authorized to view this canteen\'s debts.');
-    }
+    // 1. Find the Canteen that belongs to the logged-in Owner
+    const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
+    
+    // 2. THE FIX: Search for debts using the Owner's ID (your friend's logic) 
+    // OR the Canteen ID (your logic) so nothing gets missed!
+    const activeDebts = await Debt.find({ 
+      $or: [
+        { canteen: req.user.id }, 
+        { canteen: myCanteen ? myCanteen._id : null }
+      ],
+      amountOwed: { $gt: 0 } 
+    }).populate('student', 'name rollNo phone email'); 
 
-    const debts = await Debt.find({
-      canteen: req.user.managedCanteen,
-      amountOwed: { $gt: 0 } // Only fetch students who actually owe money
-    }).populate('student', 'name email rollNo limit');
-
-    res.status(200).json({ status: 'success', data: debts });
+    res.status(200).json({
+      status: 'success',
+      data: activeDebts
+    });
   } catch (error) {
-    res.status(400).json({ status: 'fail', message: error.message });
+    res.status(500).json({ status: 'error', message: error.message });
   }
 };
 

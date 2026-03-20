@@ -32,7 +32,7 @@ export default function ActiveDebtsContent() {
           hall: d.student?.hall || "N/A",
           email: d.student?.email || "N/A",
           debt: d.amountOwed,
-          limit: d.student?.creditLimit || 5000 // Fallback limit
+          limit: d.student?.limit || 5000 // Fallback limit
         }));
         setStudents(mappedDebts);
       }
