@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// In stud_canteens.jsx
-const response = await axios.get('http://localhost:5000/api/users/canteens');
+
 const StudentCanteens = () => {
   // --- 1. STATES ---
   const [step, setStep] = useState('list'); 
