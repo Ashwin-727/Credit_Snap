@@ -69,49 +69,60 @@ exports.payOffline = async (req, res) => {
 };
 
 // 🔔 3. NOTIFY STUDENT LOGIC (Using Nodemailer)
-// 🔔 3. NOTIFY STUDENT LOGIC (Using Nodemailer)
 exports.notifyStudent = async (req, res) => {
   try {
-    // We now populate BOTH the student (for their email) AND the canteen (for its name)
+    // 1. Fetch debt and populate both student and canteen
     const debt = await Debt.findById(req.params.id)
-      .populate('student')
-      .populate('canteen'); 
+      .populate('student', 'name email')
+      .populate('canteen', 'name'); 
 
-    if (!debt || !debt.student || !debt.canteen) {
-      throw new Error('Debt, Student, or Canteen record not found!');
+    // 2. Strict safety check for the core records
+    if (!debt || !debt.student) {
+      return res.status(404).json({ 
+        status: 'fail', 
+        message: 'Debt or Student record not found in the database!' 
+      });
     }
 
-    // EDGE CASE 3: Don't spam students if their debt is already cleared
+    // 3. Prevent sending emails for cleared debts
     if (debt.amountOwed === 0) {
-      throw new Error(`${debt.student.name} has no pending debt. No email sent.`);
+      return res.status(400).json({ 
+        status: 'fail', 
+        message: `${debt.student.name} has no pending debt.` 
+      });
     }
 
-    // The updated email message with the Canteen's actual name!
+    // 4. THE FAIL-SAFE: Safely grab the Canteen Name
+    const canteenName = debt.canteen && debt.canteen.name 
+      ? debt.canteen.name 
+      : "our canteen";
+
+    // 5. Draft the email
     const emailMessage = `
       Hello ${debt.student.name},
       
-      This is a friendly reminder from ${debt.canteen.name} regarding your Credit Snap account. 
+      This is a friendly reminder from ${canteenName} regarding your Credit Snap account. 
       Your current pending total at our shop is ₹${debt.amountOwed}.
       
       Please clear this amount at your earliest convenience.
       
       Thanks,
-      ${debt.canteen.name} & The Credit Snap Team
+      ${canteenName} & The Credit Snap Team
     `;
 
+    // 6. Send the email
     await sendEmail({
       email: debt.student.email,
-      // We even put the canteen name in the subject line!
-      subject: `Credit Snap: Pending Debt Reminder from ${debt.canteen.name}`, 
+      subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`, 
       message: emailMessage
     });
 
     res.status(200).json({
       status: 'success',
-      message: `Notification sent to ${debt.student.name}`
+      message: `Notification sent to ${debt.student.name} from ${canteenName}`
     });
 
   } catch (err) {
-    res.status(500).json({ status: 'fail', message: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
   }
 };
