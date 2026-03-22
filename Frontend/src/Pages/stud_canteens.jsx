@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
 import { Search, ArrowLeft, Filter, ArrowDownUp, Plus, Minus, ShoppingCart, AlertTriangle, ChevronsUpDown, ChevronDown } from 'lucide-react'; 
 
 const StudentCanteens = () => {
+  const location = useLocation();
   // ==========================================
   // 1. STATES
   // ==========================================
@@ -50,7 +52,7 @@ const StudentCanteens = () => {
   useEffect(() => {
     const fetchCanteens = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         const response = await axios.get('http://localhost:5000/api/canteens', {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -72,7 +74,7 @@ const StudentCanteens = () => {
   // ==========================================
   const handlePlaceDebtRequest = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       
       const orderData = {
         canteenId: selectedCanteen._id,
@@ -100,10 +102,13 @@ const StudentCanteens = () => {
   // 4. HELPER FUNCTIONS
   // ==========================================
   const goToMenu = async (canteen) => {
-    if (canteen.status === "Closed" || !canteen.isOpen) return;
+    if (canteen.status === "Closed") return;
     
     try {
-      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`);
+      const token = sessionStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data.status === 'success') {
         setMenuData(response.data.data.menu.filter(item => item.isAvailable));
       }
@@ -125,6 +130,11 @@ const StudentCanteens = () => {
     setCurrentFilter("all"); 
     setCurrentSort("name-az");
   };
+
+  // Reset to list view when clicking "Canteens" in sidebar again
+  useEffect(() => {
+    goToList();
+  }, [location.key]);
 
   const updateQuantity = (id, delta) => {
     setCart(prev => {
@@ -230,25 +240,27 @@ const StudentCanteens = () => {
           <div className="flex gap-4">
             
             {/* Filter Dropdown */}
-            <div className="relative" ref={filterRef}>
-              <button 
-                onClick={() => { setIsFilterDropdownOpen(!isFilterDropdownOpen); setIsSortDropdownOpen(false); }} 
-                className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[150px] justify-between text-lg"
-              >
-                <div className="flex items-center gap-2">
-                    <Filter className="w-5 h-5" /> 
-                    {step === 'list' ? getFilterText() : "Filter"}
-                </div>
-                <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {isFilterDropdownOpen && (
-                <div className="absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                  <div onClick={() => { setCurrentFilter('all'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>All Canteens</div>
-                  <div onClick={() => { setCurrentFilter('open'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Open Only</div>
-                </div>
-              )}
-            </div>
+            {step === 'list' && (
+              <div className="relative" ref={filterRef}>
+                <button 
+                  onClick={() => { setIsFilterDropdownOpen(!isFilterDropdownOpen); setIsSortDropdownOpen(false); }} 
+                  className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[150px] justify-between text-lg"
+                >
+                  <div className="flex items-center gap-2">
+                      <Filter className="w-5 h-5" /> 
+                      {getFilterText()}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {isFilterDropdownOpen && (
+                  <div className="absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                    <div onClick={() => { setCurrentFilter('all'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>All Canteens</div>
+                    <div onClick={() => { setCurrentFilter('open'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Open Only</div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Sort Dropdown */}
             <div className="relative" ref={sortRef}>
@@ -295,7 +307,7 @@ const StudentCanteens = () => {
           )}
 
           {displayCanteens.map(canteen => {
-            const isOpen = canteen.status === "Open" || canteen.isOpen;
+            const isOpen = canteen.status === "Open";
             return (
               <div 
                 key={canteen._id} 
@@ -319,7 +331,7 @@ const StudentCanteens = () => {
       {step === 'menu' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
           
-          {(selectedCanteen.status === "Closed" || !selectedCanteen.isOpen) && (
+          {(selectedCanteen.status === "Closed") && (
             <div className="col-span-1 md:col-span-2 bg-white rounded-2xl p-10 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-2">
                 <AlertTriangle className="w-10 h-10 text-orange-400" />
                 <h2 className="text-2xl font-semibold text-black mb-1">Canteen Closed</h2>
@@ -328,13 +340,13 @@ const StudentCanteens = () => {
             </div>
           )}
 
-          {selectedCanteen.isOpen && displayMenu.length === 0 && (
+          {selectedCanteen.status === "Open" && displayMenu.length === 0 && (
             <div className="col-span-2 text-center text-gray-500 py-10 text-xl font-bold bg-white rounded-2xl border border-gray-100 shadow-sm">
                 This canteen has no food items available right now!
             </div>
           )}
 
-          {selectedCanteen.isOpen && displayMenu.length > 0 && displayMenu.map(item => (
+          {selectedCanteen.status === "Open" && displayMenu.length > 0 && displayMenu.map(item => (
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition hover:shadow-md" key={item._id}>
               <div>
                 <h3 className="text-xl font-medium text-black mb-1">{item.name}</h3>

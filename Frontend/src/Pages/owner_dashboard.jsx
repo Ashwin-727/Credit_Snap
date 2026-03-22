@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 export default function OwnerDashboard() {
   // ==========================================
@@ -19,13 +20,13 @@ export default function OwnerDashboard() {
   // ==========================================
   const fetchMyCanteen = async () => {
     try {
-      const token = localStorage.getItem('token'); 
+      const token = sessionStorage.getItem('token'); 
       const res = await axios.get('http://localhost:5000/api/canteens/my', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCanteen(res.data.data.canteen);
       setIsCanteenOpen(res.data.data.canteen.isOpen); // Sets UI based on MongoDB!
-      localStorage.setItem('canteenId', res.data.data.canteen._id);
+      sessionStorage.setItem('canteenId', res.data.data.canteen._id);
     } catch (err) {
       console.error("Failed to load canteen", err);
     }
@@ -33,7 +34,7 @@ export default function OwnerDashboard() {
 
   const fetchOrders = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await axios.get('http://localhost:5000/api/orders/my-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -56,6 +57,35 @@ export default function OwnerDashboard() {
   }, []);
 
   // ==========================================
+  // 3.5 REAL-TIME SOCKET.IO CONNECTION
+  // ==========================================
+  useEffect(() => {
+    if (!canteen || !canteen._id) return;
+
+    // Connect to the Socket.io server
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('🟢 Connected to real-time server');
+      // Request to join the specific room for this canteen
+      socket.emit('joinRoom', canteen._id);
+    });
+
+    // Listen for the "newOrder" event emitted by the backend
+    socket.on('newOrder', (newOrder) => {
+      console.log('🔔 New real-time order received!', newOrder);
+      // Add the new order to the top of the list instantly!
+      setOrders(prevOrders => [newOrder, ...prevOrders]);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🔴 Disconnecting from real-time server');
+      socket.disconnect();
+    };
+  }, [canteen]);
+
+  // ==========================================
   // 4. API ACTIONS
   // ==========================================
   const toggleStatus = async () => {
@@ -65,7 +95,7 @@ export default function OwnerDashboard() {
     }
     try {
       const newStatus = !isCanteenOpen;
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       await axios.put(`http://localhost:5000/api/canteens/${canteen._id}/status`, 
         { isOpen: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -78,7 +108,7 @@ export default function OwnerDashboard() {
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await axios.patch('http://localhost:5000/api/orders/update-status', 
         { orderId, status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
