@@ -1,26 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, ChevronDown, Filter, ArrowDownUp, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-
-// Mock data simulating backend response
-const canteenDebtsData = [
-  {
-    id: '1',
-    name: 'Hall 10 Canteen',
-    currentDebt: 3915,
-    limit: 5000,
-    totalPaid: 6500,
-    transactions: [
-      { id: 't1', date: 'Dec 20, 2025', time: '5:30pm', type: 'Paid Online', amount: -500 },
-      { id: 't2', date: 'Dec 19, 2025', time: '7:35pm', type: 'Paid Offline', amount: -1000 },
-      { id: 't3', date: 'Dec 16, 2025', time: '10:30pm', type: 'Debt taken', amount: 350 },
-      { id: 't4', date: 'Dec 16, 2025', time: '5:50pm', type: 'Debt taken', amount: 200 },
-    ]
-  },
-  { id: '2', name: 'Hall 1 Canteen', currentDebt: 1180, limit: 10000, totalPaid: 1200, transactions: [] },
-  { id: '3', name: 'Hall 12 Canteen', currentDebt: 875, limit: 6000, totalPaid: 500, transactions: [] },
-  { id: '4', name: 'Hall 6 Canteen', currentDebt: 530, limit: 5000, totalPaid: 200, transactions: [] },
-  { id: '5', name: 'Hall 3 Canteen', currentDebt: 0, limit: 3000, totalPaid: 1500, transactions: [] }
-];
+import axios from 'axios';
+import { Search, ChevronDown, Filter, ArrowDownUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 
 // Sub-component for individual Canteen Debt Cards
 const DebtCard = ({ data }) => {
@@ -46,10 +26,10 @@ const DebtCard = ({ data }) => {
             </p>
             {data.currentDebt > 0 ? (
               <button 
-                className="bg-[#6366f1] hover:bg-[#4f46e5] hover:shadow-lg hover:shadow-indigo-500/20 text-white px-5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] hover:shadow-lg hover:shadow-indigo-500/20 text-white px-5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  alert(`Clearing debt for ${data.name}`);
+                  alert(`Clearing debt for ${data.name} will be integrated later!`);
                 }}
               >
                 Clear Debt
@@ -83,7 +63,7 @@ const DebtCard = ({ data }) => {
           </div>
 
           <div className="space-y-2.5">
-            {data.transactions.length > 0 ? (
+            {data.transactions && data.transactions.length > 0 ? (
               data.transactions.map((txn) => (
                 <div key={txn.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3.5 flex justify-between items-center hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-4">
@@ -102,7 +82,7 @@ const DebtCard = ({ data }) => {
               ))
             ) : (
               <div className="text-center bg-white rounded-xl border border-gray-100 py-8 text-gray-400 text-sm font-medium">
-                No recent transactions found.
+                No recent transactions found. (History coming soon)
               </div>
             )}
           </div>
@@ -114,6 +94,8 @@ const DebtCard = ({ data }) => {
 
 // Main View Debts Component
 export default function ViewDebts() {
+  const [debts, setDebts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Dropdown States
@@ -124,11 +106,9 @@ export default function ViewDebts() {
   const [activeFilter, setActiveFilter] = useState('All'); 
   const [activeSort, setActiveSort] = useState('A-Z'); 
 
-  // Refs for clicking outside
   const filterRef = useRef(null);
   const sortRef = useRef(null);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) setIsFilterOpen(false);
@@ -138,24 +118,60 @@ export default function ViewDebts() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- LOGIC: Filter and Sort ---
-  let processedDebts = [...canteenDebtsData];
+  // 1. FETCH STUDENT DEBTS FROM BACKEND
+  useEffect(() => {
+    const fetchMyDebts = async () => {
+      try {
+        // 🚨 THE FIX: Check both storages just in case!
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        
+        if (!token) {
+          console.error("NO TOKEN FOUND IN BROWSER!");
+          setLoading(false);
+          return;
+        }
 
-  // 1. Search
+        const res = await axios.get('http://localhost:5000/api/debts/my-debts', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (res.data.status === 'success') {
+          console.log("MY DEBTS:", res.data.data); // Let's see what we get!
+          const mappedData = res.data.data.map(d => ({
+            id: d._id,
+            name: d.canteen?.name || "Unknown Canteen",
+            currentDebt: d.amountOwed,
+            limit: 3000, 
+            totalPaid: 0, 
+            transactions: [] 
+          }));
+          setDebts(mappedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch debts", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMyDebts();
+  }, []);
+
+  // --- LOGIC: Filter and Sort ---
+  let processedDebts = [...debts];
+
   if (searchTerm) {
     processedDebts = processedDebts.filter(canteen => 
       canteen.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }
 
-  // 2. Filter
   if (activeFilter === 'Unpaid') {
     processedDebts = processedDebts.filter(canteen => canteen.currentDebt > 0);
   } else if (activeFilter === 'Paid') {
     processedDebts = processedDebts.filter(canteen => canteen.currentDebt === 0);
   }
 
-  // 3. Sort
   processedDebts.sort((a, b) => {
     if (activeSort === 'High to Low') return b.currentDebt - a.currentDebt;
     if (activeSort === 'Low to High') return a.currentDebt - b.currentDebt;
@@ -163,6 +179,15 @@ export default function ViewDebts() {
     if (activeSort === 'Z-A') return b.name.localeCompare(a.name);
     return 0;
   });
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full pt-20">
+         <Loader2 className="w-10 h-10 animate-spin text-[#f97316] mb-4" />
+         <p className="text-xl text-gray-600 font-medium">Fetching your debts...</p>
+      </div>
+    );
+  }
 
   return (
     <main className="p-6 md:p-10 w-full min-h-screen bg-[#f8f9fa] relative">
@@ -261,11 +286,11 @@ export default function ViewDebts() {
             <div className="bg-orange-50 p-4 rounded-full mb-2">
               <AlertTriangle className="w-10 h-10 text-[#f97316]" />
             </div>
-            <p className="text-xl font-bold text-gray-800">No canteens match your search.</p>
+            <p className="text-xl font-bold text-gray-800">No debts found!</p>
             <p className="text-gray-500 text-sm font-medium mb-2">Try adjusting your active filters.</p>
             <button 
               onClick={() => {setSearchTerm(''); setActiveFilter('All'); setActiveSort('A-Z');}}
-              className="bg-white border-2 border-gray-200 hover:border-[#f97316] hover:text-[#f97316] text-gray-700 font-bold px-6 py-2.5 rounded-xl transition-all duration-300 text-sm"
+              className="bg-white border-2 border-gray-200 hover:border-[#f97316] hover:text-[#f97316] text-gray-700 font-bold px-6 py-2.5 rounded-xl transition-all duration-300 text-sm cursor-pointer"
             >
               Clear All Filters
             </button>
