@@ -22,7 +22,7 @@ export default function OwnerProfile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         if (!token) return navigate('/');
 
         const response = await fetch('http://localhost:5000/api/users/my-profile', {
@@ -65,7 +65,7 @@ export default function OwnerProfile() {
 
   const handleSaveClick = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/users/update-my-profile', {
         method: 'PATCH',
         headers: {

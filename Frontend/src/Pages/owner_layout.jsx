@@ -13,7 +13,7 @@ export default function OwnerLayout() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         if (!token) return;
 
         const response = await fetch('http://localhost:5000/api/users/my-profile', {
