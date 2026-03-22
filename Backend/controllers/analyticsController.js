@@ -1,5 +1,5 @@
 const Order = require('../models/ordersModel');
-const Canteen = require('../models/canteenModel'); // 👈 REQUIRED: Added to look up the canteen
+const Canteen = require('../models/canteenModel');
 const mongoose = require('mongoose');
 
 exports.getOwnerAnalytics = async (req, res) => {
@@ -22,14 +22,21 @@ exports.getOwnerAnalytics = async (req, res) => {
     // 2. Use the ACTUAL Canteen ID for the database search
     const searchId = myCanteen._id;
 
-    // 3. Define valid statuses (only count accepted/completed orders for revenue)
+    // 3. Define valid statuses (only count accepted/completed orders)
     const validStatuses = ['accepted', 'completed'];
+
+    // 🎯 THE FIX: Create a base match condition that EXCLUDES offline debt payments
+    const baseMatchCondition = {
+      canteen: searchId,
+      status: { $in: validStatuses },
+      'items.name': { $ne: 'Offline Debt Payment' } // 👈 Ignores the receipts!
+    };
 
     // ==========================================
     // PIE CHART: Most Ordered Items (Top 5)
     // ==========================================
     const popularOrdersRaw = await Order.aggregate([
-      { $match: { canteen: searchId, status: { $in: validStatuses } } },
+      { $match: baseMatchCondition },
       { $unwind: '$items' },
       { $group: { _id: '$items.name', value: { $sum: '$items.quantity' } } },
       { $sort: { value: -1 } },
@@ -50,7 +57,12 @@ exports.getOwnerAnalytics = async (req, res) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const weeklyOrdersRaw = await Order.aggregate([
-      { $match: { canteen: searchId, status: { $in: validStatuses }, createdAt: { $gte: sevenDaysAgo } } },
+      { 
+        $match: { 
+          ...baseMatchCondition, // Spread the base conditions
+          createdAt: { $gte: sevenDaysAgo } 
+        } 
+      },
       { $group: { _id: { $dayOfWeek: '$createdAt' }, orders: { $sum: 1 } } }
     ]);
 
@@ -68,7 +80,7 @@ exports.getOwnerAnalytics = async (req, res) => {
     // MONTHLY EARNINGS: Revenue by Month
     // ==========================================
     const earningsRaw = await Order.aggregate([
-      { $match: { canteen: searchId, status: { $in: validStatuses } } },
+      { $match: baseMatchCondition },
       { $group: { _id: { $month: '$createdAt' }, earnings: { $sum: '$totalAmount' } } },
       { $sort: { '_id': 1 } }
     ]);
