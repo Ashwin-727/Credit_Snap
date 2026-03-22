@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 
 // Mock data simulating backend response (Same as in View Debts)
 const canteenDebtsData = [
@@ -13,6 +14,8 @@ const canteenDebtsData = [
 ];
 
 export default function StudDashboard() {
+  const navigate = useNavigate();
+
   // Calculate the sum of all current debts from the mock data
   const initialTotalDebt = canteenDebtsData.reduce((total, canteen) => total + canteen.currentDebt, 0);
 
@@ -81,7 +84,7 @@ export default function StudDashboard() {
           </div>
           {totalDebt > 0 && (
             <div>
-              <button className="bg-[#f97316] hover:bg-orange-600 text-white px-6 py-1.5 rounded-full font-semibold shadow-md transition cursor-pointer">Pay Now</button>
+              <button onClick={() => navigate('/student/debts')} className="bg-[#f97316] hover:bg-orange-600 text-white px-6 py-1.5 rounded-full font-semibold shadow-md transition cursor-pointer">Pay Now</button>
             </div>
           )}
         </div>
