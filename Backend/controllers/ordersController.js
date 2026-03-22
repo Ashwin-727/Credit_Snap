@@ -9,12 +9,22 @@ exports.createOrder = async (req, res) => {
   try {
     const { canteenId, items, totalAmount } = req.body;
 
-    const newOrder = await Order.create({
+    let newOrder = await Order.create({
       student: req.user.id, // ID from the student's login token
       canteen: canteenId,   // ID of Hall 1 (69bc3ae4...)
       items,
       totalAmount
     });
+
+    // Populate student data so the frontend can display the student name immediately
+    newOrder = await newOrder.populate('student', 'name rollNo phone');
+
+    // 📡 EMIT TO SOCKET.IO ROOM
+    const io = req.app.get('io');
+    if (io && canteenId) {
+      console.log(`📢 Emitting newOrder to room: ${canteenId}`);
+      io.to(canteenId.toString()).emit('newOrder', newOrder);
+    }
 
     res.status(201).json({
       status: 'success',
@@ -61,7 +71,7 @@ exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId, status } = req.body;
 
-    const order = await Order.findById(orderId);
+    let order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // LOGIC: Only increase debt if the order is being ACCEPTED for the first time
@@ -92,6 +102,16 @@ exports.updateOrderStatus = async (req, res) => {
     // Save the new status (accepted/rejected)
     order.status = status;
     await order.save();
+
+    // Populate canteen to send back to student
+    order = await order.populate('canteen', 'name');
+
+    // 📡 EMIT TO STUDENT'S SOCKET.IO ROOM
+    const io = req.app.get('io');
+    if (io && order.student) {
+      console.log(`📢 Emitting orderStatusUpdated to student room: ${order.student}`);
+      io.to(order.student.toString()).emit('orderStatusUpdated', order);
+    }
 
     res.status(200).json({
       status: 'success',

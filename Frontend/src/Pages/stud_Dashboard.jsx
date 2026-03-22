@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 // Mock data simulating backend response (Same as in View Debts)
 const canteenDebtsData = [
@@ -36,6 +37,38 @@ export default function StudDashboard() {
     };
 
     fetchOrders();
+  }, []);
+
+  // REAL-TIME SOCKET.IO FOR ORDER STATUS UPDATES
+  useEffect(() => {
+    const userStr = sessionStorage.getItem('user');
+    if (!userStr) return;
+    
+    // Parse the user to get their user ID
+    const user = JSON.parse(userStr);
+
+    const socket = io('http://localhost:5000');
+    
+    socket.on('connect', () => {
+      console.log('🟢 Student connected to real-time server');
+      // Request to join the specific room for this student
+      socket.emit('joinRoom', user._id);
+    });
+
+    socket.on('orderStatusUpdated', (updatedOrder) => {
+      console.log('🔔 Order Status Updated!', updatedOrder);
+      
+      // Update the order in the current list
+      setCurrentOrders((prevOrders) => 
+        prevOrders.map((order) => 
+          order._id === updatedOrder._id ? updatedOrder : order
+        )
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   return (
