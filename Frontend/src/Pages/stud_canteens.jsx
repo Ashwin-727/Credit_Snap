@@ -1,27 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Search, ArrowLeft, Filter, ArrowDownUp, Plus, Minus, ShoppingCart, AlertTriangle, ChevronsUpDown, ChevronDown } from 'lucide-react'; 
+import { socket } from '../socket';
+import {
+  Search,
+  ArrowLeft,
+  Filter,
+  ArrowDownUp,
+  Plus,
+  Minus,
+  ShoppingCart,
+  AlertTriangle,
+  ChevronsUpDown,
+  ChevronDown
+} from 'lucide-react';
 
 const StudentCanteens = () => {
   // ==========================================
   // 1. STATES
   // ==========================================
-  const [step, setStep] = useState('list'); 
-  const [canteensData, setCanteensData] = useState([]); 
+  const [step, setStep] = useState('list');
+  const [canteensData, setCanteensData] = useState([]);
   const [selectedCanteen, setSelectedCanteen] = useState(null);
-  const [cart, setCart] = useState({}); 
+  const [cart, setCart] = useState({});
   const [loading, setLoading] = useState(true);
 
   // Search & Filter & Sorting States
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentFilter, setCurrentFilter] = useState("all"); 
-  const [currentSort, setCurrentSort] = useState("name-az"); 
-  
+  const [currentFilter, setCurrentFilter] = useState("all");
+  const [currentSort, setCurrentSort] = useState("name-az");
+
   // State for dropdown visibility
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
-  // Refs for clicking outside (THE FIX FOR STICKY MENUS!)
+  // Refs for clicking outside
   const filterRef = useRef(null);
   const sortRef = useRef(null);
 
@@ -40,6 +52,7 @@ const StudentCanteens = () => {
         setIsSortDropdownOpen(false);
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -50,13 +63,10 @@ const StudentCanteens = () => {
   useEffect(() => {
     const fetchCanteens = async () => {
       try {
-        const token = sessionStorage.getItem('token');
-        const response = await axios.get('http://localhost:5000/api/canteens', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
+        const response = await axios.get('http://localhost:5000/api/canteens');
+
         if (response.data.status === 'success') {
-          setCanteensData(response.data.data);
+          setCanteensData(response.data.data.canteens);
         }
       } catch (err) {
         console.error("Error fetching canteens:", err);
@@ -64,22 +74,107 @@ const StudentCanteens = () => {
         setLoading(false);
       }
     };
+
     fetchCanteens();
   }, []);
 
   // ==========================================
-  // 3. INTEGRATION: PLACE DEBT REQUEST
+  // 3. LIVE MENU FETCHER
+  // ==========================================
+  const fetchMenu = async (canteenId) => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/canteens/${canteenId}/menu`);
+
+      if (response.data.status === 'success') {
+        const availableMenu = response.data.data.menu.filter(item => item.isAvailable);
+
+        setMenuData(availableMenu);
+
+        // Remove items from cart if they become unavailable live
+        setCart(prev =>
+          Object.fromEntries(
+            Object.entries(prev).filter(([id]) =>
+              availableMenu.some(item => item._id === id)
+            )
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load live menu", err);
+      setMenuData([]);
+    }
+  };
+
+  // ==========================================
+  // 4. SOCKET LISTENER FOR LIVE MENU UPDATES
+  // ==========================================
+  useEffect(() => {
+  if (!selectedCanteen?._id || (step !== "menu" && step !== "checkout")) return;
+
+  const canteenId = selectedCanteen._id;
+
+  socket.emit("join-canteen", canteenId);
+
+  const handleMenuUpdated = (payload) => {
+    if (payload.canteenId === canteenId) {
+      fetchMenu(canteenId);
+    }
+  };
+
+  socket.on("menu-updated", handleMenuUpdated);
+
+  return () => {
+    socket.off("menu-updated", handleMenuUpdated);
+    socket.emit("leave-canteen", canteenId);
+  };
+}, [step, selectedCanteen]);
+
+
+
+useEffect(() => {
+  const handleCanteenStatusUpdated = (payload) => {
+    setCanteensData(prev =>
+      prev.map(c =>
+        c._id === payload.canteenId
+          ? { ...c, status: payload.isOpen ? "Open" : "Closed" }
+          : c
+      )
+    );
+
+    if (selectedCanteen?._id === payload.canteenId && !payload.isOpen) {
+      alert("This canteen has closed. Returning to the canteen list.");
+      setStep('list');
+      setCart({});
+      setSelectedCanteen(null);
+      setMenuData([]);
+      setCurrentFilter("all");
+      setCurrentSort("name-az");
+      setSearchQuery("");
+    }
+  };
+
+  socket.on("canteen-status-updated", handleCanteenStatusUpdated);
+
+  return () => {
+    socket.off("canteen-status-updated", handleCanteenStatusUpdated);
+  };
+}, [selectedCanteen]);
+
+
+
+  // ==========================================
+  // 5. INTEGRATION: PLACE DEBT REQUEST
   // ==========================================
   const handlePlaceDebtRequest = async () => {
     try {
       const token = sessionStorage.getItem('token');
-      
+
       const orderData = {
         canteenId: selectedCanteen._id,
         items: Object.entries(cart).map(([id, qty]) => {
           const item = menuData.find(i => i._id === id);
-          return { name: item.name, quantity: qty, price: item.price };
-        }),
+          return item ? { name: item.name, quantity: qty, price: item.price } : null;
+        }).filter(Boolean),
         totalAmount: getTotalCost()
       };
 
@@ -89,7 +184,7 @@ const StudentCanteens = () => {
 
       if (response.data.status === 'success') {
         alert(`Success! Request sent to ${selectedCanteen.name}`);
-        goToList(); 
+        goToList();
       }
     } catch (err) {
       alert(err.response?.data?.message || "Order failed. Please log in again.");
@@ -97,43 +192,38 @@ const StudentCanteens = () => {
   };
 
   // ==========================================
-  // 4. HELPER FUNCTIONS
+  // 6. HELPER FUNCTIONS
   // ==========================================
   const goToMenu = async (canteen) => {
     if (canteen.status === "Closed") return;
-    
-    try {
-      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`);
-      if (response.data.status === 'success') {
-        setMenuData(response.data.data.menu.filter(item => item.isAvailable));
-      }
-    } catch (err) {
-      console.error("Failed to load live menu", err);
-      setMenuData([]); 
-    }
+
+    await fetchMenu(canteen._id);
 
     setSelectedCanteen(canteen);
     setSearchQuery("");
-    setCurrentSort("name-az"); 
+    setCurrentSort("name-az");
     setStep('menu');
   };
 
   const goToList = () => {
     setStep('list');
-    setCart({}); 
+    setCart({});
     setSelectedCanteen(null);
-    setCurrentFilter("all"); 
+    setMenuData([]);
+    setCurrentFilter("all");
     setCurrentSort("name-az");
   };
 
   const updateQuantity = (id, delta) => {
     setCart(prev => {
       const newQty = (prev[id] || 0) + delta;
+
       if (newQty <= 0) {
         const newCart = { ...prev };
         delete newCart[id];
         return newCart;
       }
+
       return { ...prev, [id]: newQty };
     });
   };
@@ -146,26 +236,28 @@ const StudentCanteens = () => {
   };
 
   const getCartSummaryText = () => {
-    return Object.entries(cart).map(([id, qty]) => {
-      const item = menuData.find(i => i._id === id);
-      return item ? `${item.name} x${qty}` : "";
-    }).filter(Boolean).join(", ");
+    return Object.entries(cart)
+      .map(([id, qty]) => {
+        const item = menuData.find(i => i._id === id);
+        return item ? `${item.name} x${qty}` : "";
+      })
+      .filter(Boolean)
+      .join(", ");
   };
 
   // ==========================================
-  // 5. DERIVED STATES (Search, Filter, Sort)
+  // 7. DERIVED STATES (Search, Filter, Sort)
   // ==========================================
-  
   let displayCanteens = canteensData
     .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .filter(c => {
       if (currentFilter === 'open') return c.status === "Open" || c.isOpen;
-      return true; 
+      return true;
     })
     .sort((a, b) => {
       if (currentSort === 'name-az') return a.name.localeCompare(b.name);
       if (currentSort === 'name-za') return b.name.localeCompare(a.name);
-      return 0; 
+      return 0;
     });
 
   const getFilterText = () => {
@@ -174,6 +266,7 @@ const StudentCanteens = () => {
   };
 
   let displayMenu = menuData
+    .filter(m => m.isAvailable)
     .filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       if (currentSort === 'name-az') return a.name.localeCompare(b.name);
@@ -184,121 +277,180 @@ const StudentCanteens = () => {
     });
 
   const getSortText = () => {
-    if (currentSort === 'name-az') return "Name: A → Z";
-    if (currentSort === 'name-za') return "Name: Z → A";
-    if (currentSort === 'price-low-high') return "Price: Low → High";
-    if (currentSort === 'price-high-low') return "Price: High → Low";
+    if (currentSort === 'name-az') return "Name: A to Z";
+    if (currentSort === 'name-za') return "Name: Z to A";
+    if (currentSort === 'price-low-high') return "Price: Low to High";
+    if (currentSort === 'price-high-low') return "Price: High to Low";
     return "Sort by";
   };
 
   // ==========================================
-  // 6. RENDER
+  // 8. RENDER
   // ==========================================
-  if (loading) return <div className="p-8 text-center text-xl font-medium bg-[#F8FAFC] h-full flex flex-col items-center justify-center gap-2">
-    <ChevronsUpDown className="w-10 h-10 text-orange-400" />
-    Connecting to Canteens...
-  </div>;
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-xl font-medium bg-[#F8FAFC] h-full flex flex-col items-center justify-center gap-2">
+        <ChevronsUpDown className="w-10 h-10 text-orange-400" />
+        Connecting to Canteens...
+      </div>
+    );
+  }
 
   return (
     <main className="p-10 pb-32 w-full h-full bg-[#F8FAFC] overflow-y-auto relative">
-      
-      {/* HEADER WITH BACK BUTTON */}
       {step !== 'list' && (
         <h1 className="text-3xl font-medium text-black mb-10 flex items-center gap-4">
-          <ArrowLeft className="w-7 h-7 cursor-pointer text-gray-500 hover:text-black transition" onClick={step === 'menu' ? goToList : () => setStep('menu')} />
+          <ArrowLeft
+            className="w-7 h-7 cursor-pointer text-gray-500 hover:text-black transition"
+            onClick={step === 'menu' ? goToList : () => setStep('menu')}
+          />
           {selectedCanteen?.name}
         </h1>
       )}
 
-      {/* DYNAMIC TOP ROW (Matches ViewDebts exactly) */}
       {step !== 'checkout' && (
         <div className="flex justify-between items-center mb-10 gap-6">
-          
-          {/* Large Pill-shaped Search Bar */}
           <div className="bg-white rounded-full flex items-center px-6 py-3.5 w-[450px] shadow-sm border border-gray-100 focus-within:ring-2 focus-within:ring-[#f97316] focus-within:border-[#f97316] transition">
             <Search className="w-5 h-5 text-gray-400 mr-3" />
-            <input 
-              type="text" 
-              placeholder={step === 'list' ? "Search for Canteen" : "Search for Item"} 
+            <input
+              type="text"
+              placeholder={step === 'list' ? "Search for Canteen" : "Search for Item"}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full outline-none text-gray-700 bg-transparent text-lg"
             />
           </div>
 
-          {/* Filter & Sort Buttons */}
           <div className="flex gap-4">
-            
-            {/* Filter Dropdown */}
             <div className="relative" ref={filterRef}>
-              <button 
-                onClick={() => { setIsFilterDropdownOpen(!isFilterDropdownOpen); setIsSortDropdownOpen(false); }} 
+              <button
+                onClick={() => {
+                  setIsFilterDropdownOpen(!isFilterDropdownOpen);
+                  setIsSortDropdownOpen(false);
+                }}
                 className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[150px] justify-between text-lg"
               >
                 <div className="flex items-center gap-2">
-                    <Filter className="w-5 h-5" /> 
-                    {step === 'list' ? getFilterText() : "Filter"}
+                  <Filter className="w-5 h-5" />
+                  {step === 'list' ? getFilterText() : "Filter"}
                 </div>
                 <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-              
+
               {isFilterDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                  <div onClick={() => { setCurrentFilter('all'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>All Canteens</div>
-                  <div onClick={() => { setCurrentFilter('open'); setIsFilterDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Open Only</div>
+                  <div
+                    onClick={() => {
+                      setCurrentFilter('all');
+                      setIsFilterDropdownOpen(false);
+                    }}
+                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                  >
+                    All Canteens
+                  </div>
+                  <div
+                    onClick={() => {
+                      setCurrentFilter('open');
+                      setIsFilterDropdownOpen(false);
+                    }}
+                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                  >
+                    Open Only
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Sort Dropdown */}
             <div className="relative" ref={sortRef}>
-              <button 
-                onClick={() => { setIsSortDropdownOpen(!isSortDropdownOpen); setIsFilterDropdownOpen(false); }} 
+              <button
+                onClick={() => {
+                  setIsSortDropdownOpen(!isSortDropdownOpen);
+                  setIsFilterDropdownOpen(false);
+                }}
                 className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[170px] justify-between text-lg"
               >
                 <div className="flex items-center gap-2">
-                    <ArrowDownUp className="w-5 h-5" /> 
-                    {getSortText()}
+                  <ArrowDownUp className="w-5 h-5" />
+                  {getSortText()}
                 </div>
                 <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isSortDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-              
+
               {isSortDropdownOpen && (
                 <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                  <div onClick={() => { setCurrentSort('name-az'); setIsSortDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'name-az' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Name: A → Z</div>
-                  <div onClick={() => { setCurrentSort('name-za'); setIsSortDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'name-za' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Name: Z → A</div>
-                  
+                  <div
+                    onClick={() => {
+                      setCurrentSort('name-az');
+                      setIsSortDropdownOpen(false);
+                    }}
+                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'name-az' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                  >
+                    Name: A to Z
+                  </div>
+                  <div
+                    onClick={() => {
+                      setCurrentSort('name-za');
+                      setIsSortDropdownOpen(false);
+                    }}
+                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'name-za' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                  >
+                    Name: Z to A
+                  </div>
+
                   {step === 'menu' && (
                     <>
-                      <div onClick={() => { setCurrentSort('price-low-high'); setIsSortDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'price-low-high' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Price: Low → High</div>
-                      <div onClick={() => { setCurrentSort('price-high-low'); setIsSortDropdownOpen(false); }} className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'price-high-low' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}>Price: High → Low</div>
+                      <div
+                        onClick={() => {
+                          setCurrentSort('price-low-high');
+                          setIsSortDropdownOpen(false);
+                        }}
+                        className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'price-low-high' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                      >
+                        Price: Low to High
+                      </div>
+                      <div
+                        onClick={() => {
+                          setCurrentSort('price-high-low');
+                          setIsSortDropdownOpen(false);
+                        }}
+                        className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentSort === 'price-high-low' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                      >
+                        Price: High to Low
+                      </div>
                     </>
                   )}
                 </div>
               )}
             </div>
-
           </div>
         </div>
       )}
 
-      {/* 1. CANTEEN LIST VIEW (Step 1) */}
       {step === 'list' && (
         <div className="flex flex-col">
-          
           {displayCanteens.length === 0 && (
             <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-3">
               <AlertTriangle className="w-10 h-10 text-orange-400" />
               <p className="text-xl font-semibold text-gray-800">No matching canteens found!</p>
-              <button onClick={() => { setSearchQuery(''); setCurrentFilter('all'); setCurrentSort('name-az'); }} className="mt-2 bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-5 py-2 rounded-lg transition text-sm">Clear All Filters</button>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentFilter('all');
+                  setCurrentSort('name-az');
+                }}
+                className="mt-2 bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-5 py-2 rounded-lg transition text-sm"
+              >
+                Clear All Filters
+              </button>
             </div>
           )}
 
           {displayCanteens.map(canteen => {
             const isOpen = canteen.status === "Open";
+
             return (
-              <div 
-                key={canteen._id} 
+              <div
+                key={canteen._id}
                 className={`bg-white rounded-xl mb-4 p-6 flex justify-between items-center shadow-sm border border-gray-100 transition-all overflow-hidden ${isOpen ? 'cursor-pointer hover:shadow-md' : 'opacity-70 cursor-not-allowed'}`}
                 onClick={() => goToMenu(canteen)}
               >
@@ -315,46 +467,58 @@ const StudentCanteens = () => {
         </div>
       )}
 
-      {/* 2. MENU VIEW (Step 2) */}
       {step === 'menu' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
-          
-          {(selectedCanteen.status === "Closed") && (
+          {selectedCanteen?.status === "Closed" && (
             <div className="col-span-1 md:col-span-2 bg-white rounded-2xl p-10 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-2">
-                <AlertTriangle className="w-10 h-10 text-orange-400" />
-                <h2 className="text-2xl font-semibold text-black mb-1">Canteen Closed</h2>
-                <p className="text-gray-500 max-w-sm">This canteen is currently not accepting orders. Timings: {selectedCanteen.timings || "4:00 PM - 4:00 AM"}</p>
-                <button onClick={goToList} className="mt-4 bg-[#1e293b] hover:bg-slate-800 text-white font-medium px-6 py-2.5 rounded-lg transition text-sm">Go Back to Canteens</button>
+              <AlertTriangle className="w-10 h-10 text-orange-400" />
+              <h2 className="text-2xl font-semibold text-black mb-1">Canteen Closed</h2>
+              <p className="text-gray-500 max-w-sm">This canteen is currently not accepting orders. Timings: {selectedCanteen.timings || "4:00 PM - 4:00 AM"}</p>
+              <button
+                onClick={goToList}
+                className="mt-4 bg-[#1e293b] hover:bg-slate-800 text-white font-medium px-6 py-2.5 rounded-lg transition text-sm"
+              >
+                Go Back to Canteens
+              </button>
             </div>
           )}
 
-          {selectedCanteen.status === "Open" && displayMenu.length === 0 && (
+          {selectedCanteen?.status === "Open" && displayMenu.length === 0 && (
             <div className="col-span-2 text-center text-gray-500 py-10 text-xl font-bold bg-white rounded-2xl border border-gray-100 shadow-sm">
-                This canteen has no food items available right now!
+              This canteen has no food items available right now!
             </div>
           )}
 
-          {selectedCanteen.status === "Open" && displayMenu.length > 0 && displayMenu.map(item => (
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition hover:shadow-md" key={item._id}>
+          {selectedCanteen?.status === "Open" && displayMenu.length > 0 && displayMenu.map(item => (
+            <div
+              className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition hover:shadow-md"
+              key={item._id}
+            >
               <div>
                 <h3 className="text-xl font-medium text-black mb-1">{item.name}</h3>
-                <p className="text-[#f97316] font-semibold text-lg">₹{item.price}</p>
+                <p className="text-[#f97316] font-semibold text-lg">Rs.{item.price}</p>
               </div>
-              
+
               {!cart[item._id] ? (
-                <button 
-                  className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white px-6 py-2.5 rounded-xl font-medium transition text-base shadow-sm" 
+                <button
+                  className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white px-6 py-2.5 rounded-xl font-medium transition text-base shadow-sm"
                   onClick={() => updateQuantity(item._id, 1)}
                 >
                   Add to Cart
                 </button>
               ) : (
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-inner">
-                  <button className="cursor-pointer p-2.5 hover:bg-gray-200 transition text-gray-700" onClick={() => updateQuantity(item._id, -1)}>
+                  <button
+                    className="cursor-pointer p-2.5 hover:bg-gray-200 transition text-gray-700"
+                    onClick={() => updateQuantity(item._id, -1)}
+                  >
                     <Minus className="w-5 h-5" />
                   </button>
                   <span className="px-5 font-semibold text-black text-xl">{cart[item._id]}</span>
-                  <button className="cursor-pointer p-2.5 hover:bg-gray-200 transition text-gray-700" onClick={() => updateQuantity(item._id, 1)}>
+                  <button
+                    className="cursor-pointer p-2.5 hover:bg-gray-200 transition text-gray-700"
+                    onClick={() => updateQuantity(item._id, 1)}
+                  >
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
@@ -364,7 +528,6 @@ const StudentCanteens = () => {
         </div>
       )}
 
-      {/* 3. CHECKOUT VIEW (Step 3) */}
       {step === 'checkout' && (
         <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <h2 className="text-2xl font-medium text-black mb-6">Order Summary</h2>
@@ -372,25 +535,26 @@ const StudentCanteens = () => {
             {Object.entries(cart).map(([id, qty]) => {
               const item = menuData.find(i => i._id === id);
               if (!item) return null;
+
               return (
                 <div key={id} className="flex justify-between items-center border-b border-gray-100 pb-4">
                   <div>
                     <p className="text-lg text-black">{item.name}</p>
                     <p className="text-sm text-gray-500">Qty: {qty}</p>
                   </div>
-                  <p className="text-lg font-medium text-black">₹{item.price * qty}</p>
+                  <p className="text-lg font-medium text-black">Rs.{item.price * qty}</p>
                 </div>
               );
             })}
           </div>
-          
+
           <div className="flex justify-between items-center bg-gray-50 p-6 rounded-xl mb-8">
             <span className="text-xl font-medium text-black">Total Cost:</span>
-            <span className="text-2xl font-bold text-[#f97316]">₹{getTotalCost()}</span>
+            <span className="text-2xl font-bold text-[#f97316]">Rs.{getTotalCost()}</span>
           </div>
 
-          <button 
-            className="cursor-pointer w-full bg-[#1e293b] hover:bg-slate-800 text-white py-4 rounded-xl font-medium text-lg transition" 
+          <button
+            className="cursor-pointer w-full bg-[#1e293b] hover:bg-slate-800 text-white py-4 rounded-xl font-medium text-lg transition"
             onClick={handlePlaceDebtRequest}
           >
             Place Debt Request
@@ -398,7 +562,6 @@ const StudentCanteens = () => {
         </div>
       )}
 
-      {/* FLOATING CART BAR */}
       {step === 'menu' && Object.keys(cart).length > 0 && (
         <div className="fixed bottom-0 right-0 w-[calc(100%-192px)] bg-white border-t border-gray-200 px-10 py-5 flex justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
           <div className="flex items-center gap-4">
@@ -407,18 +570,17 @@ const StudentCanteens = () => {
             </div>
             <div>
               <p className="text-gray-500 text-sm max-w-md truncate">{getCartSummaryText()}</p>
-              <p className="text-xl font-bold text-black">Total: ₹{getTotalCost()}</p>
+              <p className="text-xl font-bold text-black">Total: Rs.{getTotalCost()}</p>
             </div>
           </div>
-          <button 
-            className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white px-8 py-3 rounded-xl font-medium text-lg transition shadow-md" 
+          <button
+            className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white px-8 py-3 rounded-xl font-medium text-lg transition shadow-md"
             onClick={() => setStep('checkout')}
           >
             Review Order
           </button>
         </div>
       )}
-
     </main>
   );
 };

@@ -94,30 +94,39 @@ export default function OwnerEditMenu() {
   };
 
   const handleConfirmAdd = async () => {
-    // 1. Validate Input First!
-    if (!newName.trim() || !newPrice.trim() || isNaN(newPrice) || parseFloat(newPrice) < 0) {
-      alert("Please enter a valid Name and Price.");
-      return;
-    }
+  if (!newName.trim() || !newPrice.trim() || isNaN(newPrice) || parseFloat(newPrice) < 0) {
+    alert("Please enter a valid Name and Price.");
+    return;
+  }
 
-    // 2. Send to Database
-    try {
-      const res = await axios.post(`http://localhost:5000/api/canteens/${canteenId}/menu`,
-        { name: newName, price: parseFloat(newPrice), isAvailable: true },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+  // 🏆 FETCH FRESH ID RIGHT BEFORE SENDING
+  const activeCanteenId = sessionStorage.getItem('canteenId');
 
-      const newItem = res.data.data.menuItem;
-      // 3. Add to UI and Close Modal
-      setMenuItems([{ ...newItem, id: newItem._id }, ...menuItems]);
-      setIsAddModalOpen(false);
-      setNewName('');
-      setNewPrice('');
-    } catch (err) {
-      console.error("Error adding item:", err);
-      alert("Failed to add item to database");
-    }
-  };
+  if (!activeCanteenId) {
+    alert("Canteen ID not found. Please refresh the page.");
+    return;
+  }
+
+  try {
+    const res = await axios.post(`http://localhost:5000/api/canteens/${activeCanteenId}/menu`,
+      { 
+        name: newName, 
+        price: parseFloat(newPrice), 
+        isAvailable: true,
+        canteenId: activeCanteenId // Ensure your backend receives this explicitly
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const newItem = res.data.data.menuItem;
+    setMenuItems([{ ...newItem, id: newItem._id }, ...menuItems]);
+    setIsAddModalOpen(false);
+    setNewName('');
+    setNewPrice('');
+  } catch (err) {
+    console.error("Error adding item:", err);
+  }
+};
 
   // --- EDIT ITEM LOGIC ---
   const handleEditClick = (item) => {

@@ -20,13 +20,40 @@ exports.createCanteen = async (req, res) => {
 exports.updateCanteenStatus = async (req, res) => {
   try {
     const { canteenId } = req.params;
-    const { isOpen } = req.body; // Expects true or false from React
-    const updatedCanteen = await Canteen.findByIdAndUpdate(canteenId, { isOpen }, { new: true });
-    res.status(200).json({ status: 'success', data: { canteen: updatedCanteen } });
+    const { isOpen } = req.body;
+
+    const updatedCanteen = await Canteen.findByIdAndUpdate(
+      canteenId,
+      { isOpen },
+      { new: true }
+    );
+
+    if (!updatedCanteen) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Canteen not found'
+      });
+    }
+
+    const io = req.app.get('io');
+    io.emit('canteen-status-updated', {
+      canteenId: updatedCanteen._id.toString(),
+      isOpen: updatedCanteen.isOpen,
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: { canteen: updatedCanteen }
+    });
   } catch (error) {
-    res.status(400).json({ status: 'fail', message: error.message });
+    res.status(400).json({
+      status: 'fail',
+      message: error.message
+    });
   }
 };
+
+
 
 // ==========================================
 // MENU MANAGEMENT (For the OwnerEditMenu page)
@@ -46,31 +73,77 @@ exports.getMenu = async (req, res) => {
 exports.addMenuItem = async (req, res) => {
   try {
     const newItem = await MenuItem.create({ ...req.body, canteenId: req.params.canteenId });
-    res.status(201).json({ status: 'success', data: { menuItem: newItem } });
+
+    const io = req.app.get('io');
+    io.to(`canteen:${newItem.canteenId}`).emit('menu-updated', {
+      canteenId: newItem.canteenId.toString(),
+    });
+
+    res.status(201).json({
+      status: 'success',
+      data: { menuItem: newItem }
+    });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
+
 
 // Edit an item OR toggle availability (Matches Edit Modal & Switch)
 exports.updateMenuItem = async (req, res) => {
   try {
-    const updatedItem = await MenuItem.findByIdAndUpdate(req.params.itemId, req.body, { new: true });
-    res.status(200).json({ status: 'success', data: { menuItem: updatedItem } });
+    const updatedItem = await MenuItem.findByIdAndUpdate(
+      req.params.itemId,
+      req.body,
+      { new: true }
+    );
+
+    const io = req.app.get('io');
+    io.to(`canteen:${updatedItem.canteenId}`).emit('menu-updated', {
+      canteenId: updatedItem.canteenId.toString(),
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: { menuItem: updatedItem }
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+
+// Delete an item (Matches your Trash2 Icon)
+exports.deleteMenuItem = async (req, res) => {
+  try {
+    const itemToDelete = await MenuItem.findById(req.params.itemId);
+
+    if (!itemToDelete) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Menu item not found'
+      });
+    }
+
+    await MenuItem.findByIdAndDelete(req.params.itemId);
+
+    const io = req.app.get('io');
+    io.to(`canteen:${itemToDelete.canteenId}`).emit('menu-updated', {
+      canteenId: itemToDelete.canteenId.toString(),
+    });
+
+    res.status(204).json({
+      status: 'success',
+      data: null
+    });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
   }
 };
 
-// Delete an item (Matches your Trash2 Icon)
-exports.deleteMenuItem = async (req, res) => {
-  try {
-    await MenuItem.findByIdAndDelete(req.params.itemId);
-    res.status(204).json({ status: 'success', data: null });
-  } catch (error) {
-    res.status(400).json({ status: 'fail', message: error.message });
-  }
-};
 // controllers/canteenController.js
 
 // Get my canteen (For the Owner Dashboard)
@@ -101,10 +174,11 @@ exports.getAllCanteens = async (req, res) => {
       timings: "4:00 PM - 4:00 AM" // You can add this to the model later!
     }));
 
-    res.status(200).json({
-      status: 'success',
-      data: formattedCanteens
-    });
+   res.status(200).json({
+  status: 'success',
+  data: { canteens: formattedCanteens }
+  });
+
   } catch (err) {
     res.status(404).json({ status: 'fail', message: err.message });
   }
