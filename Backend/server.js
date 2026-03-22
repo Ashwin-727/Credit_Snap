@@ -1,49 +1,47 @@
-require('dotenv').config(); 
-const mongoose = require('mongoose'); // Bring in Mongoose
+require('dotenv').config();
+const mongoose = require('mongoose');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 const app = require('./app');
 
-const http = require('http');
-const { Server } = require('socket.io');
-
 const PORT = process.env.PORT || 5000;
-const DB_URL = process.env.MONGO_URI; // Grab the secret URL
+const DB_URL = process.env.MONGO_URI;
 
-const server = http.createServer(app);
+const httpServer = createServer(app);
 
-// Initialize Socket.io
-const io = new Server(server, {
+const io = new Server(httpServer, {
   cors: {
-    origin: '*', // For development
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
-  }
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  },
 });
 
-// Configure Socket.io Events
+app.set('io', io);
+
 io.on('connection', (socket) => {
-  console.log('⚡ A user connected to Socket.io:', socket.id);
-  
-  // Listen for canteen owners opening their dashboard
-  socket.on('joinRoom', (canteenId) => {
-    socket.join(canteenId);
-    console.log(`🔌 Dashboard socket joined Canteen Room: ${canteenId}`);
+  console.log('Socket connected:', socket.id);
+
+  socket.on('join-canteen', (canteenId) => {
+    socket.join(`canteen:${canteenId}`);
+    console.log(`Socket ${socket.id} joined canteen:${canteenId}`);
+  });
+
+  socket.on('leave-canteen', (canteenId) => {
+    socket.leave(`canteen:${canteenId}`);
+    console.log(`Socket ${socket.id} left canteen:${canteenId}`);
   });
 
   socket.on('disconnect', () => {
-    console.log('❌ A user disconnected from Socket.io:', socket.id);
+    console.log('Socket disconnected:', socket.id);
   });
 });
 
-// Make `io` accessible in controllers (exports.createOrder)
-app.set('io', io);
-
-// Connect to MongoDB
 mongoose.connect(DB_URL)
   .then(() => {
     console.log('✅ Successfully connected to MongoDB Database!');
-    
-    // Only turn on the server IF the database connects successfully
-    server.listen(PORT, () => {
-      console.log(`🚀 Backend Engine is running on http://localhost:${PORT}`);
+
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Backend running on http://localhost:${PORT}`);
     });
   })
   .catch((error) => {

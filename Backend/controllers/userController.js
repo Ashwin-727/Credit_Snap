@@ -236,6 +236,7 @@ exports.login = async (req, res) => {
     res.status(200).json({
       status: 'success',
       token,
+      canteenId: user.role === 'owner' ? (await Canteen.findOne({ ownerId: user._id }))._id : null, // 👈 MANDATORY
       data: { user }
     });
   } catch (error) {
