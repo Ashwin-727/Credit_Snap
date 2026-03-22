@@ -103,7 +103,10 @@ const StudentCanteens = () => {
     if (canteen.status === "Closed") return;
     
     try {
-      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`);
+      const token = sessionStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5000/api/canteens/${canteen._id}/menu`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data.status === 'success') {
         setMenuData(response.data.data.menu.filter(item => item.isAvailable));
       }
