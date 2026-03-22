@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
 import { socket } from '../socket';
 import {
   Search,
@@ -15,34 +16,26 @@ import {
 } from 'lucide-react';
 
 const StudentCanteens = () => {
-  // ==========================================
-  // 1. STATES
-  // ==========================================
+  const location = useLocation();
+
   const [step, setStep] = useState('list');
   const [canteensData, setCanteensData] = useState([]);
   const [selectedCanteen, setSelectedCanteen] = useState(null);
   const [cart, setCart] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Search & Filter & Sorting States
   const [searchQuery, setSearchQuery] = useState("");
   const [currentFilter, setCurrentFilter] = useState("all");
   const [currentSort, setCurrentSort] = useState("name-az");
 
-  // State for dropdown visibility
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
-  // Refs for clicking outside
   const filterRef = useRef(null);
   const sortRef = useRef(null);
 
-  // Live menu for a selected canteen
   const [menuData, setMenuData] = useState([]);
 
-  // ==========================================
-  // 1.5 CLOSE DROPDOWNS ON OUTSIDE CLICK
-  // ==========================================
   useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) {
@@ -57,9 +50,6 @@ const StudentCanteens = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ==========================================
-  // 2. FETCH REAL CANTEENS FROM BACKEND
-  // ==========================================
   useEffect(() => {
     const fetchCanteens = async () => {
       try {
@@ -78,9 +68,6 @@ const StudentCanteens = () => {
     fetchCanteens();
   }, []);
 
-  // ==========================================
-  // 3. LIVE MENU FETCHER
-  // ==========================================
   const fetchMenu = async (canteenId) => {
     try {
       const response = await axios.get(`http://localhost:5000/api/canteens/${canteenId}/menu`);
@@ -90,7 +77,6 @@ const StudentCanteens = () => {
 
         setMenuData(availableMenu);
 
-        // Remove items from cart if they become unavailable live
         setCart(prev =>
           Object.fromEntries(
             Object.entries(prev).filter(([id]) =>
@@ -105,66 +91,56 @@ const StudentCanteens = () => {
     }
   };
 
-  // ==========================================
-  // 4. SOCKET LISTENER FOR LIVE MENU UPDATES
-  // ==========================================
   useEffect(() => {
-  if (!selectedCanteen?._id || (step !== "menu" && step !== "checkout")) return;
+    if (!selectedCanteen?._id || (step !== "menu" && step !== "checkout")) return;
 
-  const canteenId = selectedCanteen._id;
+    const canteenId = selectedCanteen._id;
 
-  socket.emit("join-canteen", canteenId);
+    socket.emit("join-canteen", canteenId);
 
-  const handleMenuUpdated = (payload) => {
-    if (payload.canteenId === canteenId) {
-      fetchMenu(canteenId);
-    }
-  };
+    const handleMenuUpdated = (payload) => {
+      if (payload.canteenId === canteenId) {
+        fetchMenu(canteenId);
+      }
+    };
 
-  socket.on("menu-updated", handleMenuUpdated);
+    socket.on("menu-updated", handleMenuUpdated);
 
-  return () => {
-    socket.off("menu-updated", handleMenuUpdated);
-    socket.emit("leave-canteen", canteenId);
-  };
-}, [step, selectedCanteen]);
+    return () => {
+      socket.off("menu-updated", handleMenuUpdated);
+      socket.emit("leave-canteen", canteenId);
+    };
+  }, [step, selectedCanteen]);
 
+  useEffect(() => {
+    const handleCanteenStatusUpdated = (payload) => {
+      setCanteensData(prev =>
+        prev.map(c =>
+          c._id === payload.canteenId
+            ? { ...c, status: payload.isOpen ? "Open" : "Closed" }
+            : c
+        )
+      );
 
+      if (selectedCanteen?._id === payload.canteenId && !payload.isOpen) {
+        alert("This canteen has closed. Returning to the canteen list.");
+        setStep('list');
+        setCart({});
+        setSelectedCanteen(null);
+        setMenuData([]);
+        setCurrentFilter("all");
+        setCurrentSort("name-az");
+        setSearchQuery("");
+      }
+    };
 
-useEffect(() => {
-  const handleCanteenStatusUpdated = (payload) => {
-    setCanteensData(prev =>
-      prev.map(c =>
-        c._id === payload.canteenId
-          ? { ...c, status: payload.isOpen ? "Open" : "Closed" }
-          : c
-      )
-    );
+    socket.on("canteen-status-updated", handleCanteenStatusUpdated);
 
-    if (selectedCanteen?._id === payload.canteenId && !payload.isOpen) {
-      alert("This canteen has closed. Returning to the canteen list.");
-      setStep('list');
-      setCart({});
-      setSelectedCanteen(null);
-      setMenuData([]);
-      setCurrentFilter("all");
-      setCurrentSort("name-az");
-      setSearchQuery("");
-    }
-  };
+    return () => {
+      socket.off("canteen-status-updated", handleCanteenStatusUpdated);
+    };
+  }, [selectedCanteen]);
 
-  socket.on("canteen-status-updated", handleCanteenStatusUpdated);
-
-  return () => {
-    socket.off("canteen-status-updated", handleCanteenStatusUpdated);
-  };
-}, [selectedCanteen]);
-
-
-
-  // ==========================================
-  // 5. INTEGRATION: PLACE DEBT REQUEST
-  // ==========================================
   const handlePlaceDebtRequest = async () => {
     try {
       const token = sessionStorage.getItem('token');
@@ -191,9 +167,6 @@ useEffect(() => {
     }
   };
 
-  // ==========================================
-  // 6. HELPER FUNCTIONS
-  // ==========================================
   const goToMenu = async (canteen) => {
     if (canteen.status === "Closed") return;
 
@@ -213,6 +186,10 @@ useEffect(() => {
     setCurrentFilter("all");
     setCurrentSort("name-az");
   };
+
+  useEffect(() => {
+    goToList();
+  }, [location.key]);
 
   const updateQuantity = (id, delta) => {
     setCart(prev => {
@@ -245,9 +222,6 @@ useEffect(() => {
       .join(", ");
   };
 
-  // ==========================================
-  // 7. DERIVED STATES (Search, Filter, Sort)
-  // ==========================================
   let displayCanteens = canteensData
     .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .filter(c => {
@@ -284,9 +258,6 @@ useEffect(() => {
     return "Sort by";
   };
 
-  // ==========================================
-  // 8. RENDER
-  // ==========================================
   if (loading) {
     return (
       <div className="p-8 text-center text-xl font-medium bg-[#F8FAFC] h-full flex flex-col items-center justify-center gap-2">
@@ -322,44 +293,46 @@ useEffect(() => {
           </div>
 
           <div className="flex gap-4">
-            <div className="relative" ref={filterRef}>
-              <button
-                onClick={() => {
-                  setIsFilterDropdownOpen(!isFilterDropdownOpen);
-                  setIsSortDropdownOpen(false);
-                }}
-                className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[150px] justify-between text-lg"
-              >
-                <div className="flex items-center gap-2">
-                  <Filter className="w-5 h-5" />
-                  {step === 'list' ? getFilterText() : "Filter"}
-                </div>
-                <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
+            {step === 'list' && (
+              <div className="relative" ref={filterRef}>
+                <button
+                  onClick={() => {
+                    setIsFilterDropdownOpen(!isFilterDropdownOpen);
+                    setIsSortDropdownOpen(false);
+                  }}
+                  className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6 py-3.5 rounded-xl shadow-md flex items-center gap-2 transition min-w-[150px] justify-between text-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-5 h-5" />
+                    {getFilterText()}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
 
-              {isFilterDropdownOpen && (
-                <div className="absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                  <div
-                    onClick={() => {
-                      setCurrentFilter('all');
-                      setIsFilterDropdownOpen(false);
-                    }}
-                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
-                  >
-                    All Canteens
+                {isFilterDropdownOpen && (
+                  <div className="absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                    <div
+                      onClick={() => {
+                        setCurrentFilter('all');
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'all' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                    >
+                      All Canteens
+                    </div>
+                    <div
+                      onClick={() => {
+                        setCurrentFilter('open');
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
+                    >
+                      Open Only
+                    </div>
                   </div>
-                  <div
-                    onClick={() => {
-                      setCurrentFilter('open');
-                      setIsFilterDropdownOpen(false);
-                    }}
-                    className={`px-5 py-3.5 text-base cursor-pointer hover:bg-gray-50 transition ${currentFilter === 'open' ? 'bg-orange-50 font-semibold text-[#f97316]' : 'text-gray-700'}`}
-                  >
-                    Open Only
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             <div className="relative" ref={sortRef}>
               <button
