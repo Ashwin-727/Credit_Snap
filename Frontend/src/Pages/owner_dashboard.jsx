@@ -40,7 +40,10 @@ export default function OwnerDashboard() {
       });
 
       if (response.data.status === 'success') {
-        setOrders(response.data.data);
+        const actualOrders = response.data.data.filter(
+          order => !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
+        );
+        setOrders(actualOrders);
       }
     } catch (err) {
       console.error("Error fetching owner orders:", err);
