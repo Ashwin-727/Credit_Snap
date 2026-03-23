@@ -18,7 +18,7 @@ exports.getActiveDebts = async (req, res) => {
         { canteen: myCanteen ? myCanteen._id : null }
       ],
       amountOwed: { $gt: 0 } 
-    }).populate('student', 'name rollNo phoneNo email'); 
+    }).populate('student', 'name rollNo phoneNo email limit'); 
 
     res.status(200).json({
       status: 'success',
@@ -70,6 +70,17 @@ exports.payOffline = async (req, res) => {
       totalAmount: amountPaid,
       status: 'accepted' // Automatically accepted so it gets the green tag in the UI
     });
+
+    // 4️⃣ EMIT TO SOCKET.IO ROOMS SO IT UPDATES LIVE
+    const io = req.app.get('io');
+    if (io) {
+      if (student && student._id) {
+        io.to(`student:${student._id}`).emit('debt-updated');
+      }
+      if (debt.canteen) {
+        io.to(`canteen:${debt.canteen}`).emit('debt-updated');
+      }
+    }
 
     res.status(200).json({
       status: 'success',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Search, ChevronDown, CheckCircle, BellRing, AlertTriangle, X, IndianRupee } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 export default function ActiveDebtsContent() {
   const [search, setSearch] = useState("");
@@ -32,7 +33,7 @@ export default function ActiveDebtsContent() {
           hall: d.student?.hall || "N/A",
           email: d.student?.email || "N/A",
           debt: d.amountOwed,
-          limit: d.student?.limit || 5000 // Fallback limit
+          limit: d.student?.limit || 3000 // Ensure fallback matches strict 3000 per-canteen limit
         }));
         setStudents(mappedDebts);
       }
@@ -45,6 +46,23 @@ export default function ActiveDebtsContent() {
 
   useEffect(() => {
     fetchDebts();
+
+    const canteenIdStr = sessionStorage.getItem('canteenId');
+    if (!canteenIdStr) return;
+
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      socket.emit('join-canteen', canteenIdStr);
+    });
+
+    socket.on('debt-updated', () => {
+      fetchDebts();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const showToast = (msg, type = 'success') => { 

@@ -2,23 +2,42 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-
-// Mock data simulating backend response (Same as in View Debts)
-const canteenDebtsData = [
-  { id: '1', name: 'Hall 10 Canteen', currentDebt: 3915 },
-  { id: '2', name: 'Hall 1 Canteen', currentDebt: 1180 },
-  { id: '3', name: 'Hall 12 Canteen', currentDebt: 875 },
-  { id: '4', name: 'Hall 6 Canteen', currentDebt: 530 },
-  { id: '5', name: 'Hall 3 Canteen', currentDebt: 0 }
-];
+import { useNavigate } from 'react-router-dom';
 
 export default function StudDashboard() {
-  // Calculate the sum of all current debts from the mock data
-  const initialTotalDebt = canteenDebtsData.reduce((total, canteen) => total + canteen.currentDebt, 0);
+  const navigate = useNavigate();
 
-  const [totalDebt, setTotalDebt] = useState(initialTotalDebt); 
-  const [alerts, setAlerts] = useState([]); 
-  const [currentOrders, setCurrentOrders] = useState([]); 
+  const [totalDebt, setTotalDebt] = useState(0);
+  const [alerts, setAlerts] = useState([]);
+  const [currentOrders, setCurrentOrders] = useState([]);
+
+  const fetchTotalDebt = async () => {
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return;
+      const res = await axios.get('http://localhost:5000/api/debts/my-debts', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data.status === 'success') {
+        const sum = res.data.data.reduce((total, d) => total + d.amountOwed, 0);
+        setTotalDebt(sum);
+
+        // Generate Alerts for any canteen debt that is 80% or more of the 3000 limit (>= ₹2400)
+        const generatedAlerts = [];
+        res.data.data.forEach(d => {
+          if (d.amountOwed >= 2400) {
+            generatedAlerts.push({
+              canteen: d.canteen?.name || "Unknown Canteen",
+              message: `Debt is at ₹${d.amountOwed} (≥80% of ₹3000 limit)`
+            });
+          }
+        });
+        setAlerts(generatedAlerts);
+      }
+    } catch (err) {
+      console.error('Failed to fetch debts:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -29,7 +48,10 @@ export default function StudDashboard() {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.data.status === 'success') {
-          setCurrentOrders(res.data.data);
+          const actualOrders = res.data.data.filter(
+            order => !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
+          );
+          setCurrentOrders(actualOrders);
         }
       } catch (err) {
         console.error('Failed to fetch orders:', err);
@@ -37,33 +59,35 @@ export default function StudDashboard() {
     };
 
     fetchOrders();
+    fetchTotalDebt();
   }, []);
 
-  // REAL-TIME SOCKET.IO FOR ORDER STATUS UPDATES
   useEffect(() => {
     const userStr = sessionStorage.getItem('user');
     if (!userStr) return;
-    
-    // Parse the user to get their user ID
+
     const user = JSON.parse(userStr);
+    const userIdStr = user._id;
 
     const socket = io('http://localhost:5000');
-    
+
     socket.on('connect', () => {
-      console.log('🟢 Student connected to real-time server');
-      // Request to join the specific room for this student
-      socket.emit('joinRoom', user._id);
+      socket.emit('join-student', userIdStr);
     });
 
     socket.on('orderStatusUpdated', (updatedOrder) => {
       console.log('🔔 Order Status Updated!', updatedOrder);
       
-      // Update the order in the current list
-      setCurrentOrders((prevOrders) => 
-        prevOrders.map((order) => 
+      setCurrentOrders((prevOrders) =>
+        prevOrders.map((order) =>
           order._id === updatedOrder._id ? updatedOrder : order
         )
       );
+    });
+
+    socket.on('debt-updated', () => {
+      console.log('💸 Debt Updated Live!');
+      fetchTotalDebt();
     });
 
     return () => {
@@ -81,17 +105,17 @@ export default function StudDashboard() {
           </div>
           {totalDebt > 0 && (
             <div>
-              <button className="bg-[#f97316] hover:bg-orange-600 text-white px-6 py-1.5 rounded-full font-semibold shadow-md transition cursor-pointer">Pay Now</button>
+              <button onClick={() => navigate('/student/debts')} className="bg-[#f97316] hover:bg-orange-600 text-white px-6 py-1.5 rounded-full font-semibold shadow-md transition cursor-pointer">Pay Now</button>
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-4 flex-1 shadow-sm border border-gray-100 max-w-md">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="bg-white rounded-2xl p-4 flex-1 shadow-sm border border-gray-100 max-w-md flex flex-col h-40">
+          <div className="flex items-center gap-2 mb-3 shrink-0">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
             <h2 className="text-xl font-semibold text-gray-800">Alerts</h2>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-y-auto flex-1 pr-2 custom-scrollbar">
             {alerts.length === 0 ? (
               <p className="text-gray-500 text-sm italic">You have no active alerts.</p>
             ) : (
@@ -111,7 +135,7 @@ export default function StudDashboard() {
         <div className="space-y-4">
           {currentOrders.length === 0 ? (
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 text-center">
-                <p className="text-gray-500">You have no active orders. Go to Canteens to order some food!</p>
+              <p className="text-gray-500">You have no active orders. Go to Canteens to order some food!</p>
             </div>
           ) : (
             currentOrders.map((order, index) => (
@@ -125,11 +149,10 @@ export default function StudDashboard() {
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
-                    order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                    order.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                      order.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                        'bg-red-100 text-red-700'
+                    }`}>
                     {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                   </span>
                   <span className="font-semibold text-blue-900">Price: <span className="text-blue-600">₹{order.totalAmount}</span></span>
