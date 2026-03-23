@@ -4,7 +4,6 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 
-// --- HELPER FUNCTION ---
 const formatOrderDate = (dateString) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -26,7 +25,6 @@ const formatOrderDate = (dateString) => {
   return `${date.toLocaleDateString()}, ${timeString}`;
 };
 
-// --- SUB-COMPONENT: EXPANDABLE ORDER CARD ---
 const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -36,16 +34,12 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
   return (
     <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col mb-4 transition-all duration-200 hover:shadow-md">
       <div className="flex justify-between items-center">
-        
-        {/* Left Side: Items & Details */}
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-1">{orderItems}</h3>
           <p className="text-gray-600 text-sm">
             {canteenName}, <span className="text-gray-500">{formatOrderDate(order.createdAt)}</span>
           </p>
         </div>
-
-        {/* Right Side: Status, Dropdown & Price */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
@@ -55,7 +49,6 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
             }`}>
               {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
             </span>
-            
             {order.status === 'pending' && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -70,8 +63,6 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
           </span>
         </div>
       </div>
-
-      {/* Expanded Action Area (Only shows for Pending Orders) */}
       {isExpanded && order.status === 'pending' && (
         <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <button
@@ -92,11 +83,8 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
   );
 };
 
-
-// --- MAIN DASHBOARD COMPONENT ---
 export default function StudDashboard() {
   const navigate = useNavigate();
-
   const [totalDebt, setTotalDebt] = useState(0);
   const [alerts, setAlerts] = useState([]);
   const [currentOrders, setCurrentOrders] = useState([]);
@@ -111,8 +99,6 @@ export default function StudDashboard() {
       if (res.data.status === 'success') {
         const sum = res.data.data.reduce((total, d) => total + d.amountOwed, 0);
         setTotalDebt(sum);
-
-        // Generate Alerts for any canteen debt that is 80% or more of the 3000 limit (>= ₹2400)
         const generatedAlerts = [];
         res.data.data.forEach(d => {
           if (d.amountOwed >= 2400) {
@@ -140,23 +126,19 @@ export default function StudDashboard() {
         if (res.data.status === 'success') {
           const now = new Date();
           const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
           const recentActualOrders = res.data.data.filter(order => {
             const isOfflinePayment = order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment';
             if (isOfflinePayment) return false;
-
             const orderDate = new Date(order.createdAt);
             const isRecent = (now - orderDate) <= fortyEightHoursMs;
             return isRecent;
           });
-
           setCurrentOrders(recentActualOrders);
         }
       } catch (err) {
         console.error('Failed to fetch orders:', err);
       }
     };
-
     fetchOrders();
     fetchTotalDebt();
   }, []);
@@ -164,37 +146,27 @@ export default function StudDashboard() {
   useEffect(() => {
     const userStr = sessionStorage.getItem('user');
     if (!userStr) return;
-
     const user = JSON.parse(userStr);
     const userIdStr = user._id;
-
     const socket = io('http://localhost:5000');
-
     socket.on('connect', () => {
       socket.emit('join-student', userIdStr);
     });
-
     socket.on('orderStatusUpdated', (updatedOrder) => {
-      console.log('🔔 Order Status Updated!', updatedOrder);
       setCurrentOrders((prevOrders) =>
         prevOrders.map((order) =>
           order._id === updatedOrder._id ? updatedOrder : order
         )
       );
     });
-
     socket.on('debt-updated', () => {
-      console.log('💸 Debt Updated Live!');
       fetchTotalDebt();
     });
-
     return () => {
       socket.disconnect();
     };
   }, []);
 
-
-  // --- NEW HANDLERS FOR CANCEL / CHANGE ---
   const handleCancelOrder = async (orderId) => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
     try {
@@ -202,13 +174,13 @@ export default function StudDashboard() {
       await axios.patch(`http://localhost:5000/api/orders/${orderId}/cancel`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Remove it from the current orders list immediately
       setCurrentOrders(prev => prev.filter(o => o._id !== orderId));
     } catch (err) {
       alert(err.response?.data?.message || "Error cancelling order");
     }
   };
 
+  // 🌟 FIX: Updated Change Order Logic
   const handleChangeOrder = async (order) => {
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -218,26 +190,23 @@ export default function StudDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // 2. Save items to localStorage so the Menu can pre-fill the cart
-      localStorage.setItem('cart', JSON.stringify(order.items));
-
-      // 3. Navigate to the Canteen's menu page
+      // 2. Save BOTH items and Canteen ID to localStorage
       const canteenId = typeof order.canteen === 'object' ? order.canteen._id : order.canteen;
-      navigate(`/menu/${canteenId}`); 
+      localStorage.setItem('changeOrderCanteenId', canteenId);
+      localStorage.setItem('changeOrderCart', JSON.stringify(order.items));
+
+      // 3. Navigate to the Canteens page
+      // ⚠️ IMPORTANT: Change this URL if your canteens route is different (e.g., '/canteens')
+      navigate('/student/canteens'); 
       
     } catch (err) {
       alert("Failed to change order. Please try again.");
     }
   };
 
-
   return (
     <main className="p-8 overflow-y-auto flex-1 bg-gray-50 min-h-screen">
-      
-      {/* Top Banner (Debt & Alerts) */}
       <div className="flex flex-col md:flex-row gap-6 mb-8">
-        
-        {/* Debt Card */}
         <div className="bg-gradient-to-r from-[#1e3a8a] to-[#3b82f6] rounded-2xl p-6 text-white flex-1 shadow-lg h-40 flex flex-col justify-between">
           <div>
             <p className="text-lg opacity-90">Total Debt:</p>
@@ -251,8 +220,6 @@ export default function StudDashboard() {
             </div>
           )}
         </div>
-
-        {/* Alerts Card */}
         <div className="bg-white rounded-2xl p-4 flex-1 shadow-sm border border-gray-100 max-w-md flex flex-col h-40">
           <div className="flex items-center gap-2 mb-3 shrink-0">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
@@ -272,8 +239,6 @@ export default function StudDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Current Orders Section */}
       <div>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">Current Orders:</h2>
         <div className="space-y-4">
@@ -295,4 +260,4 @@ export default function StudDashboard() {
       </div>
     </main>
   );
-} 
+}

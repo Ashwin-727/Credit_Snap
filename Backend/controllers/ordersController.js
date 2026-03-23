@@ -228,3 +228,44 @@ exports.getStudentHistory = async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 };
+
+// 6. STUDENT: Cancel/Reject a pending order
+exports.cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ status: 'fail', message: 'Order not found' });
+    }
+
+    // Security check: Make sure this student actually owns this order
+    const studentId = req.user._id ? req.user._id.toString() : req.user.id;
+    if (order.student.toString() !== studentId) {
+      return res.status(403).json({ status: 'fail', message: 'You cannot cancel someone else\'s order.' });
+    }
+
+    // Rule check: Only pending orders can be cancelled by the student
+    if (order.status !== 'pending') {
+      return res.status(400).json({ status: 'fail', message: 'You can only cancel orders that are still pending.' });
+    }
+
+    // 🔥 THE FIX: Change status to 'rejected' instead of deleting it
+    order.status = 'rejected';
+    await order.save();
+
+    // 📡 EMIT TO SOCKET.IO: Tell the Canteen Owner dashboard to update!
+    const io = req.app.get('io');
+    if (io && order.canteen) {
+      // This tells the owner's screen to update this specific order to 'rejected'
+      io.to(`canteen:${order.canteen}`).emit('orderStatusUpdated', order);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Order successfully rejected.',
+      data: order
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+};
