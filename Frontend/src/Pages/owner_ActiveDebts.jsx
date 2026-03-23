@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Search, ChevronDown, CheckCircle, BellRing, AlertTriangle, X, IndianRupee } from 'lucide-react';
 
@@ -28,7 +28,7 @@ export default function ActiveDebtsContent() {
         const mappedDebts = res.data.data.map(d => ({
           id: d._id,
           name: d.student?.name || "Unknown Student",
-          phone: d.student?.phone || "+91 XXXXXXXXXX",
+          phone: d.student?.phoneNo || "+91 XXXXXXXXXX",
           hall: d.student?.hall || "N/A",
           email: d.student?.email || "N/A",
           debt: d.amountOwed,
