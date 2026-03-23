@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { History, Search, ChevronDown, Filter, ArrowUpDown } from 'lucide-react';
 
-// 🛡️ FIX 1: Bulletproof Date Parsing for Cross-Browser Sorting
 const parseDateTime = (dateStr, timeStr) => {
   if (!dateStr) return new Date();
   if (dateStr.toLowerCase().includes('today')) return new Date();
@@ -15,7 +14,6 @@ const parseDateTime = (dateStr, timeStr) => {
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     const [day, month, year] = parts;
-    // Standardizing the date structure prevents "Invalid Date" crashes
     return new Date(`${year}-${month}-${day} ${timeStr || ''}`);
   }
   return new Date(); 
@@ -51,11 +49,13 @@ export default function StudHistory() {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        // 🛡️ FIX 2: Console Log to verify backend data is actually arriving!
-        console.log("📥 Data from Backend:", res.data);
-
         if (res.data.status === 'success') {
-          setOrderData(res.data.data.orders || []);
+          // 🛡️ THE FIX: Filter out "Pending" orders immediately so they never hit the state
+          const finalizedOrders = (res.data.data.orders || []).filter(
+            order => order.status && order.status.toLowerCase() !== 'pending'
+          );
+          
+          setOrderData(finalizedOrders);
           setPaymentData(res.data.data.payments || []);
         }
       } catch (err) {
@@ -81,11 +81,10 @@ export default function StudHistory() {
   const activeData = activeTab === 'order' ? orderData : paymentData;
   const uniqueCanteens = [...new Set(activeData.map(item => item.canteen))];
 
-  // 🛡️ FIX 3: Defensive Filtering Logic to prevent invisible crashes
+  // Defensive Filtering Logic
   let processedData = activeData.filter(record => {
     const safeSearch = searchTerm.toLowerCase();
     
-    // Safely cast to string before attempting .toLowerCase()
     const matchesSearch = searchTerm === '' || 
       (record.canteen && String(record.canteen).toLowerCase().includes(safeSearch)) || 
       (record.items && String(record.items).toLowerCase().includes(safeSearch));
@@ -153,7 +152,7 @@ export default function StudHistory() {
                             value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                       <option value="">All Statuses</option>
                       <option value="Accepted">Accepted</option>
-                      <option value="Pending">Pending</option>
+                      {/* 🛡️ THE FIX: Removed "Pending" from the dropdown list */}
                       <option value="Rejected">Rejected</option>
                     </select>
                   </div>
@@ -202,8 +201,7 @@ export default function StudHistory() {
       <div className="flex bg-gray-200/50 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-1.5 mb-8 shadow-inner relative z-10">
         <button
           onClick={() => { setActiveTab('order'); setFilterStatus(''); }}
-
-          className={`cursor-pointer flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 cursor-pointer ${
             activeTab === 'order' 
               ? 'bg-[#ea580c] text-white shadow-md transform scale-[1.01]' 
               : 'text-gray-500 hover:text-gray-800 hover:bg-white/60'
@@ -213,8 +211,7 @@ export default function StudHistory() {
         </button>
         <button
           onClick={() => { setActiveTab('debt'); setFilterStatus(''); }}
-
-          className={`cursor-pointer flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
+          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 cursor-pointer ${
             activeTab === 'debt' 
               ? 'bg-[#ea580c] text-white shadow-md transform scale-[1.01]' 
               : 'text-gray-500 hover:text-gray-800 hover:bg-white/60'
