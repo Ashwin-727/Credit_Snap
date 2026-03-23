@@ -57,6 +57,9 @@ export default function OwnerHistory() {
               id: order._id,
               name: order.student?.name || "Unknown Student",
               phone: order.student?.phoneNo || "+91 XXXXXXXXXX",
+              rollNo: order.student?.rollNo || "N/A",
+              hall: order.student?.hallNo || "N/A",
+              room: order.student?.roomNo || "N/A",
               amount: order.totalAmount,
               date: `${day}-${month}-${year}`, // Matches your parseDateTime logic!
               time: timeStr
@@ -207,7 +210,7 @@ export default function OwnerHistory() {
             <div key={index} className="bg-white p-5 rounded-xl shadow-sm border border-[#D9D9D9] flex justify-between items-center hover:shadow-md transition">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{record.name}</h3>
-                <p className="text-gray-500 text-sm">Ph no. {record.phone}</p>
+                <p className="text-gray-500 text-sm">{record.phone}, {record.rollNo}, Hall-{record.hall}, {record.room ? record.room.replace(/[-\s]/g, '') : "N/A"}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <span className="font-bold text-gray-900 text-base">Paid: ₹{record.amount}</span>
