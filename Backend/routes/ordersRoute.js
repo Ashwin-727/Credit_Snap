@@ -10,8 +10,10 @@ router.use(userController.protect);
 // Student Endpoints
 router.post('/place', ordersController.createOrder);
 router.get('/my-active-orders', ordersController.getStudentOrders);
+router.get('/my-history', ordersController.getStudentHistory); // 👈 ADD THIS LINE
 
 // Owner Endpoints
 router.get('/my-orders', ordersController.getOwnerOrders);
 router.patch('/update-status', ordersController.updateOrderStatus);
+
 module.exports = router;
