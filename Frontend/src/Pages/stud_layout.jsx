@@ -74,7 +74,7 @@ export default function StudLayout() {
               {isSidebarOpen && <span className="text-sm font-semibold whitespace-nowrap">Home</span>}
             </div>
 
-            <div onClick={() => navigate('/student/canteens')} className={`mx-2 py-3 px-2 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${isActive('canteens') ? 'bg-[#f97316] text-white shadow-lg' : 'text-gray-300 hover:text-white opacity-70'}`}>
+            <div onClick={() => navigate('/student/canteens', { state: { reset: true } })} className={`mx-2 py-3 px-2 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${isActive('canteens') ? 'bg-[#f97316] text-white shadow-lg' : 'text-gray-300 hover:text-white opacity-70'}`}>
               <Utensils className={`w-6 h-6 transition-all duration-300 ${isSidebarOpen ? 'mb-1' : ''}`} />
               {isSidebarOpen && <span className="text-sm font-semibold whitespace-nowrap">Canteens</span>}
             </div>

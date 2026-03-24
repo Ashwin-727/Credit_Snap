@@ -3,40 +3,36 @@ import axios from 'axios';
 import { Search, ChevronDown, Filter, ArrowDownUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { io } from 'socket.io-client';
 
-// Sub-component for individual Canteen Debt Cards (SIMPLIFIED)
+// Sub-component for individual Canteen Debt Cards (MATCHING STUD CANTEENS UI)
 const DebtCard = ({ data }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-4 transition-all duration-300 overflow-hidden hover:shadow-md hover:border-gray-200">
-      <div className="p-5 flex justify-between items-center select-none">
-        
-        <h2 className="text-lg font-bold text-gray-800">
-          {data.name}
-        </h2>
-
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-end gap-1.5">
-            <p className="text-xs font-bold text-gray-500 tracking-wide uppercase">
-              Debt: <span className="text-gray-800 text-sm ml-1">₹{data.currentDebt} <span className="text-gray-400 font-medium normal-case text-xs">/ ₹{data.limit}</span></span>
-            </p>
-            {data.currentDebt > 0 ? (
-              <button 
-                className="bg-[#6366f1] hover:bg-[#4f46e5] hover:shadow-lg hover:shadow-indigo-500/20 text-white px-5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  alert(`Clearing debt for ${data.name} will be integrated later!`);
-                }}
-              >
-                Clear Debt
-              </button>
-            ) : (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-5 py-2 rounded-xl text-xs font-bold tracking-wide">
-                Settled
-              </div>
-            )}
-          </div>
-        </div>
-        
+    <div className="bg-white rounded-xl mb-4 p-6 flex justify-between items-center shadow-sm border border-gray-100 transition-all overflow-hidden hover:shadow-md">
+      
+      <div>
+        <h2 className="text-2xl font-medium text-black mb-1">{data.name}</h2>
       </div>
+
+      <div className="flex flex-col items-end gap-2">
+        <p className="font-bold text-gray-500 tracking-wide uppercase text-sm">
+          Debt: <span className="text-black text-lg ml-1">₹{data.currentDebt} <span className="text-gray-400 font-medium normal-case text-base">/ ₹{data.limit}</span></span>
+        </p>
+        {data.currentDebt > 0 ? (
+          <button 
+            className="bg-[#6366f1] hover:bg-[#4f46e5] text-white px-6 py-2 rounded-xl text-sm font-medium transition cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              alert(`Clearing debt for ${data.name} will be integrated later!`);
+            }}
+          >
+            Clear Debt
+          </button>
+        ) : (
+          <div className="bg-[#D1FAE5] text-[#065F46] px-6 py-2 rounded-full font-medium text-sm">
+            Settled
+          </div>
+        )}
+      </div>
+        
     </div>
   );
 };
@@ -89,7 +85,7 @@ export default function ViewDebts() {
             id: d._id,
             name: d.canteen?.name || "Unknown Canteen",
             currentDebt: d.amountOwed,
-            limit: 3000, // Hardcoded for now, can be pulled from user limit later
+            limit: d.limit || 3000, // ✅ Dynamic: reads the per-canteen limit set by the owner
           }));
           setDebts(mappedData);
         }
@@ -182,39 +178,11 @@ export default function ViewDebts() {
         {/* Orange Filter & Sort Buttons */}
         <div className="flex gap-4">
           
-          {/* Filter Dropdown */}
-          <div className="relative" ref={filterRef}>
-            <button 
-              onClick={() => { setIsFilterOpen(!isFilterOpen); setIsSortOpen(false); }} 
-              className="bg-[#f97316] text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-[#ea580c] transition-colors justify-between min-w-[140px]"
-            >
-              <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4" /> 
-                  {activeFilter === 'All' ? 'Filter by' : activeFilter}
-              </div>
-              <ChevronDown className="w-4 h-4 ml-1" />
-            </button>
-            
-            {isFilterOpen && (
-              <div className="absolute right-0 mt-3 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden py-2">
-                {['All', 'Unpaid', 'Paid'].map((option) => (
-                  <div 
-                    key={option}
-                    onClick={() => { setActiveFilter(option); setIsFilterOpen(false); }} 
-                    className={`px-5 py-2.5 text-sm cursor-pointer transition-colors ${activeFilter === option ? 'bg-orange-50 font-bold text-[#f97316]' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}`}
-                  >
-                    {option === 'All' ? 'All Canteens' : `${option} Only`}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Sort Dropdown */}
           <div className="relative" ref={sortRef}>
             <button 
-              onClick={() => { setIsSortOpen(!isSortOpen); setIsFilterOpen(false); }} 
-              className="bg-[#f97316] text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-[#ea580c] transition-colors justify-between min-w-[140px]"
+              onClick={() => setIsSortOpen(!isSortOpen)} 
+              className="bg-[#f97316] text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-[#ea580c] transition-colors justify-between min-w-[140px] cursor-pointer"
             >
               <div className="flex items-center gap-2">
                   <ArrowDownUp className="w-4 h-4" /> 
@@ -245,7 +213,7 @@ export default function ViewDebts() {
           BOTTOM SECTION - POLISHED DEBT CARDS
           ========================================================
       */}
-      <div className="flex flex-col relative z-0 max-w-5xl mx-auto">
+      <div className="flex flex-col">
         {processedDebts.length > 0 ? (
           processedDebts.map((canteen) => (
             <DebtCard key={canteen.id} data={canteen} />
