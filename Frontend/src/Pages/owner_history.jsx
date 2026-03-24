@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { History, Search, ChevronDown, Filter, ArrowUpDown } from 'lucide-react';
+import { History, Search, ChevronDown, CheckCircle, ArrowUpDown } from 'lucide-react';
 
 // Helper to convert DD-MM-YYYY HH:MM PM to a sortable JS Date object
 const parseDateTime = (dateStr, timeStr) => {
@@ -9,51 +9,65 @@ const parseDateTime = (dateStr, timeStr) => {
 };
 
 export default function OwnerHistory() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('order'); // 'order' or 'debt'
+  const [search, setSearch] = useState('');
   
   // Dropdown toggles
-  const [isSortOpen, setIsSortOpen] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Sorting and Filtering States
-  const [sortConfig, setSortConfig] = useState(''); 
+  const [sortConfig, setSortConfig] = useState('default'); 
   const [filterAmount, setFilterAmount] = useState({ min: '', max: '' });
   const [filterDate, setFilterDate] = useState({ start: '', end: '' });
 
-  // 1. Hook up the history data state
-  const [historyData, setHistoryData] = useState([]);
+  // History data state
+  const [historyData, setHistoryData] = useState({ orders: [], debts: [] });
   const [loading, setLoading] = useState(true);
 
-  // Refs for clicking outside to close dropdowns
-  const sortRef = useRef(null);
-  const filterRef = useRef(null);
-
-  // 2. Fetch completed orders / offline payments
+  // 2. Fetch completed orders / offline payments and active debts
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const token = sessionStorage.getItem("token");
-        const res = await axios.get("http://localhost:5000/api/orders/my-orders", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        
+        const [ordersRes, debtsRes] = await Promise.all([
+          axios.get("http://localhost:5000/api/orders/my-orders", {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get("http://localhost:5000/api/debts/active", {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
 
-        if (res.data.status === "success") {
-          // Filter to only show Accepted orders (which includes offline payments!)
-          const completedOrders = res.data.data.filter(o => o.status === 'accepted');
+        const debtMap = {};
+        if (debtsRes.data.status === "success") {
+          debtsRes.data.data.forEach(d => {
+            if (d.student && d.student._id) {
+              debtMap[d.student._id.toString()] = d.amountOwed;
+            }
+          });
+        }
 
-          // Map it perfectly to fit your UI's logic
-          const formattedHistory = completedOrders.map(order => {
+        if (ordersRes.data.status === "success") {
+          const completedOrders = ordersRes.data.data.filter(o => o.status === 'accepted');
+
+          const formattedOrders = [];
+          const formattedDebts = [];
+
+          completedOrders.forEach(order => {
             const dateObj = new Date(order.createdAt);
             
-            // Format to DD-MM-YYYY
             const day = String(dateObj.getDate()).padStart(2, '0');
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const year = dateObj.getFullYear();
             
-            // Format to hh:mm A
             const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-            return {
+            const isDebtPayment = order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment';
+            const studentId = order.student?._id?.toString() || "";
+
+            const baseData = {
               id: order._id,
               name: order.student?.name || "Unknown Student",
               phone: order.student?.phoneNo || "+91 XXXXXXXXXX",
@@ -61,12 +75,27 @@ export default function OwnerHistory() {
               hall: order.student?.hallNo || "N/A",
               room: order.student?.roomNo || "N/A",
               amount: order.totalAmount,
-              date: `${day}-${month}-${year}`, // Matches your parseDateTime logic!
+              date: `${day}-${month}-${year}`,
               time: timeStr
             };
+
+            if (isDebtPayment) {
+              formattedDebts.push({
+                ...baseData,
+                remainingDebt: debtMap[studentId] || 0
+              });
+            } else {
+              const itemsStr = order.items && order.items.length > 0 
+                ? order.items.map(i => `${i.name} x${i.quantity}`).join(', ') 
+                : "Items";
+              formattedOrders.push({
+                ...baseData,
+                itemsStr
+              });
+            }
           });
 
-          setHistoryData(formattedHistory);
+          setHistoryData({ orders: formattedOrders, debts: formattedDebts });
         }
       } catch (err) {
         console.error("Failed to load history:", err);
@@ -78,18 +107,10 @@ export default function OwnerHistory() {
     fetchHistory();
   }, []);
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (sortRef.current && !sortRef.current.contains(event.target)) setIsSortOpen(false);
-      if (filterRef.current && !filterRef.current.contains(event.target)) setIsFilterOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const activeData = activeTab === 'order' ? historyData.orders : historyData.debts;
 
-  // Apply Filters & Search
-  let processedData = historyData.filter(record => {
-    const matchesSearch = record.name.toLowerCase().includes(searchTerm.toLowerCase());
+  let list = activeData.filter(record => {
+    const matchesSearch = record.name.toLowerCase().includes(search.toLowerCase());
     
     const amount = record.amount;
     const min = filterAmount.min === '' ? 0 : parseFloat(filterAmount.min);
@@ -110,9 +131,8 @@ export default function OwnerHistory() {
     return matchesSearch && matchesAmount && matchesDate;
   });
 
-  // Apply Sorting
-  if (sortConfig) {
-    processedData.sort((a, b) => {
+  if (sortConfig !== 'default') {
+    list = [...list].sort((a, b) => {
       if (sortConfig.includes('date')) {
         const dateA = parseDateTime(a.date, a.time);
         const dateB = parseDateTime(b.date, b.time);
@@ -124,105 +144,179 @@ export default function OwnerHistory() {
     });
   }
 
-  if (loading) return <div className="p-8"><p>Loading History...</p></div>;
+  const getSortText = () => {
+    if (sortConfig === 'date_desc') return "Recent (Newest First)";
+    if (sortConfig === 'date_asc') return "Recent (Oldest First)";
+    if (sortConfig === 'amount_desc') return "Amount: High → Low";
+    if (sortConfig === 'amount_asc') return "Amount: Low → High";
+    return "Sort by";
+  };
+
+  const getFilterText = () => {
+    if (filterAmount.min || filterAmount.max || filterDate.start || filterDate.end) return "Filtered";
+    return "Filter by";
+  };
+
+  if (loading) return <div className="p-8"><p className="font-medium text-gray-500">Loading History...</p></div>;
 
   return (
-    <div className="p-8">
-      {/* Action Bar: Search & Filters */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+    <div className="p-8 pb-32">
+      
+      {/* TOP ROW: Search & Filters */}
+      <div className="flex justify-between items-center mb-8">
         
-        <div className="flex items-center bg-white border border-[#D9D9D9] rounded-full px-5 py-2.5 flex-1 max-w-lg shadow-sm focus-within:border-[#eab308] transition-colors">
-          <Search className="w-5 h-5 text-gray-400" />
+        {/* SEARCH BAR EXACTLY LIKE ACTIVEDEBTS */}
+        <div className="flex items-center bg-white px-4 py-2.5 rounded-full shadow-sm w-[500px] border border-gray-100 focus-within:border-[#eab308] transition-colors">
+          <Search className="w-5 h-5 text-gray-400 mr-2" />
           <input 
             type="text" 
-            placeholder="Search for Transaction by Name" 
-            className="ml-3 w-full outline-none text-gray-700 bg-transparent placeholder-gray-400 font-medium"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={activeTab === 'order' ? "Search Orders by Name" : "Search Transactions by Name"} 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="bg-transparent outline-none w-full text-gray-700"
           />
         </div>
-        
-        <div className="flex gap-4 relative">
-          
-          {/* FILTER DROPDOWN */}
-          <div ref={filterRef}>
-            <button onClick={() => {setIsFilterOpen(!isFilterOpen); setIsSortOpen(false);}} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition">
-              <Filter className="w-4 h-4 text-[#1e293b]" /> Filter by
+
+        {/* FILTERS AND SORT EXACTLY LIKE ACTIVEDEBTS */}
+        <div className="flex gap-4">
+          <div className="relative">
+            <button onClick={() => { setFilterOpen(!filterOpen); setSortOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition min-w-[150px] justify-between">
+              {getFilterText()} <ChevronDown className="w-4 h-4" />
             </button>
-            {isFilterOpen && (
-              <div className="absolute top-12 right-32 w-72 bg-white border border-gray-200 shadow-xl rounded-xl p-4 z-50">
-                <h4 className="font-semibold text-gray-800 mb-3 border-b pb-2">Filter Options</h4>
+            {filterOpen && (
+              <div className="absolute right-0 mt-3 w-72 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden p-5">
+                <h4 className="font-semibold text-gray-800 mb-4 border-b pb-2">Filter Options</h4>
                 
                 <div className="mb-4">
-                  <label className="text-xs text-gray-500 font-semibold mb-1 block">Amount Range (₹)</label>
+                  <label className="text-xs text-gray-500 font-semibold mb-1.5 block">Amount Range (₹)</label>
                   <div className="flex gap-2">
-                    <input type="number" placeholder="Min" className="w-full border rounded px-2 py-1 text-sm outline-none" 
+                    <input type="number" placeholder="Min" className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm outline-none focus:border-[#eab308]" 
                            value={filterAmount.min} onChange={(e)=>setFilterAmount({...filterAmount, min: e.target.value})} />
-                    <span className="text-gray-400">-</span>
-                    <input type="number" placeholder="Max" className="w-full border rounded px-2 py-1 text-sm outline-none"
+                    <span className="text-gray-400 self-center">-</span>
+                    <input type="number" placeholder="Max" className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm outline-none focus:border-[#eab308]"
                            value={filterAmount.max} onChange={(e)=>setFilterAmount({...filterAmount, max: e.target.value})} />
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <label className="text-xs text-gray-500 font-semibold mb-1 block">Date Range</label>
+                <div className="mb-5">
+                  <label className="text-xs text-gray-500 font-semibold mb-1.5 block">Date Range</label>
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-sm"><span className="w-10">From:</span> <input type="date" className="border rounded px-2 py-1 flex-1 text-sm outline-none" value={filterDate.start} onChange={(e)=>setFilterDate({...filterDate, start: e.target.value})} /></div>
-                    <div className="flex items-center gap-2 text-sm"><span className="w-10">To:</span> <input type="date" className="border rounded px-2 py-1 flex-1 text-sm outline-none" value={filterDate.end} onChange={(e)=>setFilterDate({...filterDate, end: e.target.value})} /></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="w-10 text-gray-500">From:</span> <input type="date" className="border border-gray-200 rounded-md px-2 py-1 flex-1 text-sm outline-none focus:border-[#eab308]" value={filterDate.start} onChange={(e)=>setFilterDate({...filterDate, start: e.target.value})} /></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="w-10 text-gray-500">To:</span> <input type="date" className="border border-gray-200 rounded-md px-2 py-1 flex-1 text-sm outline-none focus:border-[#eab308]" value={filterDate.end} onChange={(e)=>setFilterDate({...filterDate, end: e.target.value})} /></div>
                   </div>
                 </div>
                 
-                <button onClick={() => {setFilterAmount({min:'', max:''}); setFilterDate({start:'', end:''});}} className="cursor-pointer text-xs text-orange-600 hover:underline w-full text-center">Clear Filters</button>
+                <button onClick={() => {setFilterAmount({min:'', max:''}); setFilterDate({start:'', end:''});}} className="cursor-pointer text-sm font-semibold text-[#1e293b] bg-gray-100 hover:bg-gray-200 py-2 rounded-md w-full text-center transition">Clear Filters</button>
               </div>
             )}
           </div>
 
-          {/* SORT DROPDOWN */}
-          <div ref={sortRef}>
-            <button onClick={() => {setIsSortOpen(!isSortOpen); setIsFilterOpen(false);}} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition">
-              <ArrowUpDown className="w-4 h-4 text-[#1e293b]" /> Sort by <ChevronDown className="w-4 h-4 text-[#1e293b]" />
+          <div className="relative">
+            <button onClick={() => { setSortOpen(!sortOpen); setFilterOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition min-w-[200px] justify-between">
+              {getSortText()} <ChevronDown className="w-4 h-4" />
             </button>
-            {isSortOpen && (
-              <div className="absolute top-12 right-0 w-48 bg-white border border-gray-200 shadow-xl rounded-xl p-2 z-50 flex flex-col">
-                <button onClick={() => setSortConfig('date_desc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Newest First)</button>
-                <button onClick={() => setSortConfig('date_asc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'date_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Recent (Oldest First)</button>
-                <div className="border-t my-1"></div>
-                <button onClick={() => setSortConfig('amount_desc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_desc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (High to Low)</button>
-                <button onClick={() => setSortConfig('amount_asc')} className={`cursor-pointer text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${sortConfig === 'amount_asc' ? 'font-bold text-orange-600' : 'text-gray-700'}`}>Amount (Low to High)</button>
-                <button onClick={() => setSortConfig('')} className="cursor-pointer text-left px-3 py-2 text-xs text-gray-400 hover:text-gray-600 mt-1">Clear Sort</button>
+            {sortOpen && (
+              <div className="absolute right-0 mt-3 w-56 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden py-2">
+                <div onClick={() => { setSortConfig('default'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'default' ? 'bg-yellow-50 font-semibold text-[#1e293b]' : 'text-gray-700'}`}>Default</div>
+                <div onClick={() => { setSortConfig('date_desc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'date_desc' ? 'bg-yellow-50 font-semibold text-[#1e293b]' : 'text-gray-700'}`}>Recent (Newest First)</div>
+                <div onClick={() => { setSortConfig('date_asc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'date_asc' ? 'bg-yellow-50 font-semibold text-[#1e293b]' : 'text-gray-700'}`}>Recent (Oldest First)</div>
+                <div onClick={() => { setSortConfig('amount_desc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'amount_desc' ? 'bg-yellow-50 font-semibold text-[#1e293b]' : 'text-gray-700'}`}>Amount: High → Low</div>
+                <div onClick={() => { setSortConfig('amount_asc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'amount_asc' ? 'bg-yellow-50 font-semibold text-[#1e293b]' : 'text-gray-700'}`}>Amount: Low → High</div>
               </div>
             )}
           </div>
-
         </div>
       </div>
 
-      {/* History List */}
-      <div className="space-y-4">
-        {processedData.length === 0 ? (
-           <div className="bg-white p-12 rounded-2xl shadow-sm border border-[#D9D9D9] flex flex-col items-center justify-center min-h-[400px]">
-             <History className="w-16 h-16 text-gray-300 mb-4" />
-             <h2 className="text-xl font-semibold text-gray-800 mb-2">No Transactions Found</h2>
-             <p className="text-gray-500 text-sm">Try adjusting your filters or search term.</p>
+      {/* HEADER ROW EXACTLY LIKE ACTIVEDEBTS */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-4xl font-semibold text-gray-900">History</h1>
+        
+        {/* TABS RIGHT NEXT TO HEADER OMEGA CLEAN */}
+        <div className="flex bg-gray-100 border border-gray-200 rounded-xl p-1 shadow-inner relative z-10 w-[400px]">
+          <button
+            onClick={() => { setActiveTab('order'); }}
+            className={`cursor-pointer flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${
+              activeTab === 'order' 
+                ? 'bg-white text-[#1e293b] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' 
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Order History
+          </button>
+          <button
+            onClick={() => { setActiveTab('debt'); }}
+            className={`cursor-pointer flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${
+              activeTab === 'debt' 
+                ? 'bg-white text-[#1e293b] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' 
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Transaction History
+          </button>
+        </div>
+      </div>
+
+      {/* DYNAMIC CARDS LIST EXACTLY LIKE ACTIVEDEBTS */}
+      <div className="flex flex-col gap-5 relative">
+        {list.length === 0 ? (
+           <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-3">
+             <History className="w-12 h-12 text-gray-300 mb-2" />
+             <p className="text-2xl font-semibold text-gray-800">No {activeTab === 'order' ? 'Orders' : 'Transactions'} Found</p>
+             <p className="text-gray-500">Try adjusting your filters or search term.</p>
+             {(search || filterAmount.min || filterAmount.max || filterDate.start || filterDate.end || sortConfig !== 'default') && (
+               <button onClick={() => { setSearch(''); setFilterAmount({min:'', max:''}); setFilterDate({start:'', end:''}); setSortConfig('default'); }} className="cursor-pointer mt-4 bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg transition text-sm">Clear Filters</button>
+             )}
            </div>
         ) : (
-          processedData.map((record, index) => (
-            <div key={index} className="bg-white p-5 rounded-xl shadow-sm border border-[#D9D9D9] flex justify-between items-center hover:shadow-md transition">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">{record.name}</h3>
-                <p className="text-gray-500 text-sm">{record.phone}, {record.rollNo}, Hall-{record.hall}, {record.room ? record.room.replace(/[-\s]/g, '') : "N/A"}</p>
+          list.map((record) => (
+            <div key={record.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition hover:shadow-md">
+              
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-xl font-medium text-gray-900">{record.name}</h3>
+                  {activeTab === 'debt' && (
+                    <span className="px-2.5 py-0.5 bg-green-50 text-green-700 text-[11px] font-bold rounded-md uppercase tracking-wider border border-green-200">
+                      Payment Received
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500">
+                  Ph no. {record.phone}, {record.rollNo}, Hall-{record.hall}, Room {record.room ? record.room.replace(/[-\s]/g, '') : "N/A"}
+                </p>
+                {activeTab === 'order' && (
+                  <p className="text-sm text-gray-600 font-medium mt-3 bg-gray-50 px-3 py-2 rounded-lg inline-block border border-gray-100">
+                    🛍️ {record.itemsStr}
+                  </p>
+                )}
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="font-bold text-gray-900 text-base">Paid: ₹{record.amount}</span>
-                <div className="flex gap-4 text-sm text-gray-500 mt-1">
-                  <span>Date: {record.date}</span>
-                  <span>Time: {record.time}</span>
+
+              <div className="flex flex-col items-start md:items-end gap-2 w-full md:w-auto">
+                <div className="text-[15px] font-medium text-gray-700">
+                  {activeTab === 'order' ? 'Total:' : 'Paid Amount:'} <span className={`font-bold ${activeTab === 'debt' ? 'text-green-600' : 'text-[#1e293b]'}`}>₹{record.amount}</span>
+                </div>
+                
+                {activeTab === 'debt' && (
+                  <div className="text-sm font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                    Remaining Debt: <span className="font-bold text-red-500">₹{record.remainingDebt}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2 text-sm text-gray-400 mt-1 font-medium">
+                  <span>{record.date}</span>
+                  <span>•</span>
+                  <span>{record.time}</span>
                 </div>
               </div>
+
             </div>
           ))
         )}
       </div>
+
+      {(filterOpen || sortOpen) && (
+        <div onClick={() => { setFilterOpen(false); setSortOpen(false); }} className="fixed inset-0 z-40" />
+      )}
     </div>
   );
 }

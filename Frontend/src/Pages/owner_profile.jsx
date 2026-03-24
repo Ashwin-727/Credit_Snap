@@ -110,6 +110,14 @@ export default function OwnerProfile() {
     reader.readAsDataURL(file);
   };
 
+  const handleRemovePhoto = (e) => {
+    e.preventDefault();
+    setEditForm({ ...editForm, profilePhoto: "" });
+    setIsEditing(true);
+  };
+
+  const displayPhoto = isEditing ? editForm.profilePhoto : ownerInfo.profilePhoto;
+
   return (
     <div className="flex-1 h-full min-h-screen flex items-start justify-center pt-24 bg-white">
       
@@ -118,16 +126,23 @@ export default function OwnerProfile() {
         
         <div className="absolute -top-16 left-1/2 transform -translate-x-1/2">
           <div className="relative bg-[#0f172a] rounded-full flex items-center justify-center w-32 h-32 border-[8px] border-white overflow-hidden group transition-all">
-            {editForm.profilePhoto || ownerInfo.profilePhoto ? (
-              <img src={isEditing ? editForm.profilePhoto : ownerInfo.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+            {displayPhoto ? (
+              <img src={displayPhoto} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               <User className="w-16 h-16 text-white" strokeWidth={2} />
             )}
             
-            <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-              <span className="text-white text-[11px] font-semibold tracking-wider uppercase mt-2">Change</span>
-              <input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" onChange={handlePhotoUpload} />
-            </label>
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+              <label className="cursor-pointer hover:opacity-80 transition-opacity">
+                <span className="text-white text-[11px] font-semibold tracking-wider uppercase">Change</span>
+                <input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" onChange={handlePhotoUpload} />
+              </label>
+              {displayPhoto && (
+                <button onClick={handleRemovePhoto} className="cursor-pointer text-red-400 hover:text-red-300 transition-colors text-[11px] font-semibold tracking-wider uppercase mt-1">
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
