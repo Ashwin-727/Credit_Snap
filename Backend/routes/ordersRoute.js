@@ -20,5 +20,6 @@ router.patch('/:id/cancel', ordersController.cancelOrder); // 👈 ADD THIS LINE
 // ------------------------------------
 router.get('/my-orders', ordersController.getOwnerOrders);
 router.patch('/update-status', ordersController.updateOrderStatus);
+router.patch('/clear', ordersController.clearOrders);
 
 module.exports = router;

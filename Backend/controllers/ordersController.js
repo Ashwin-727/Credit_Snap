@@ -277,3 +277,32 @@ exports.cancelOrder = async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 };
+
+// 7. OWNER: Clear selected processed orders from the active dashboard UI
+exports.clearOrders = async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ status: 'fail', message: 'Please provide an array of order IDs to clear.' });
+    }
+
+    // Verify canteen ownership to prevent unauthorized clears
+    const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
+    if (!myCanteen) {
+      return res.status(403).json({ status: 'fail', message: 'You are not authorized to clear these orders.' });
+    }
+
+    await Order.updateMany(
+      { _id: { $in: orderIds }, canteen: myCanteen._id }, 
+      { isCleared: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Successfully cleared orders from dashboard.'
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+};
