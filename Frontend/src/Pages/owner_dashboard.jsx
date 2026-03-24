@@ -41,7 +41,7 @@ export default function OwnerDashboard() {
 
       if (response.data.status === 'success') {
         const actualOrders = response.data.data.filter(
-          order => !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
+          order => !order.isCleared && !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
         );
         setOrders(actualOrders);
       }
@@ -118,12 +118,33 @@ export default function OwnerDashboard() {
     }
   };
 
-  const removeOrder = (orderId) => {
-    setOrders(orders.filter(order => order._id !== orderId));
+  const removeOrder = async (orderId) => {
+    try {
+      const token = sessionStorage.getItem('token');
+      await axios.patch('http://localhost:5000/api/orders/clear', 
+        { orderIds: [orderId] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setOrders(orders.filter(order => order._id !== orderId));
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to clear order");
+    }
   };
 
-  const clearAllOrders = () => {
-    setOrders(orders.filter(order => order.status === 'pending'));
+  const clearAllOrders = async () => {
+    const idsToClear = orders.filter(o => o.status !== 'pending').map(o => o._id);
+    if (idsToClear.length === 0) return;
+    
+    try {
+      const token = sessionStorage.getItem('token');
+      await axios.patch('http://localhost:5000/api/orders/clear', 
+        { orderIds: idsToClear },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setOrders(orders.filter(order => order.status === 'pending'));
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to clear orders");
+    }
   };
 
   // ==========================================
