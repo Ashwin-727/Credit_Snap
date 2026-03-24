@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { History, Search, ChevronDown, CheckCircle, ArrowUpDown } from 'lucide-react';
+import { History, Search, ChevronDown, CheckCircle, ArrowUpDown, ShoppingBag, Calendar, Clock } from 'lucide-react';
 
 // Helper to convert DD-MM-YYYY HH:MM PM to a sortable JS Date object
 const parseDateTime = (dateStr, timeStr) => {
@@ -180,7 +180,7 @@ export default function OwnerHistory() {
         {/* FILTERS AND SORT EXACTLY LIKE ACTIVEDEBTS */}
         <div className="flex gap-4">
           <div className="relative">
-            <button onClick={() => { setFilterOpen(!filterOpen); setSortOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition min-w-[150px] justify-between">
+            <button onClick={() => { setFilterOpen(!filterOpen); setSortOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex justify-center items-center gap-2 transition">
               {getFilterText()} <ChevronDown className="w-4 h-4" />
             </button>
             {filterOpen && (
@@ -212,7 +212,7 @@ export default function OwnerHistory() {
           </div>
 
           <div className="relative">
-            <button onClick={() => { setSortOpen(!sortOpen); setFilterOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition min-w-[200px] justify-between">
+            <button onClick={() => { setSortOpen(!sortOpen); setFilterOpen(false); }} className="cursor-pointer bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg shadow-sm flex justify-center items-center gap-2 transition">
               {getSortText()} <ChevronDown className="w-4 h-4" />
             </button>
             {sortOpen && (
@@ -285,8 +285,8 @@ export default function OwnerHistory() {
                   Ph no. {record.phone}, {record.rollNo}, Hall-{record.hall}, Room {record.room ? record.room.replace(/[-\s]/g, '') : "N/A"}
                 </p>
                 {activeTab === 'order' && (
-                  <p className="text-sm text-gray-600 font-medium mt-3 bg-gray-50 px-3 py-2 rounded-lg inline-block border border-gray-100">
-                    🛍️ {record.itemsStr}
+                  <p className="text-sm text-gray-600 font-medium mt-3 bg-gray-50 px-3 py-2 rounded-lg inline-flex items-center border border-gray-100">
+                    <ShoppingBag className="w-4 h-4 mr-2 text-gray-400" /> {record.itemsStr}
                   </p>
                 )}
               </div>
@@ -302,10 +302,10 @@ export default function OwnerHistory() {
                   </div>
                 )}
                 
-                <div className="flex items-center gap-2 text-sm text-gray-400 mt-1 font-medium">
-                  <span>{record.date}</span>
-                  <span>•</span>
-                  <span>{record.time}</span>
+                <div className="flex items-center gap-3 text-sm text-gray-500 mt-1 font-medium bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg">
+                  <span className="flex items-center"><Calendar className="w-4 h-4 mr-1.5 text-gray-400"/> {record.date}</span>
+                  <span className="text-gray-300">•</span>
+                  <span className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-gray-400"/> {record.time}</span>
                 </div>
               </div>
 
