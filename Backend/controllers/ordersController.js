@@ -142,6 +142,25 @@ exports.updateOrderStatus = async (req, res) => {
       if (status === 'accepted') {
          io.to(`student:${order.student._id || order.student}`).emit('debt-updated');
          io.to(`canteen:${order.canteen._id || order.canteen}`).emit('debt-updated');
+
+         // 🔔 Emit debt-threshold warning to owner if student crosses 80% or 100%
+         try {
+           const updatedDebt = await Debt.findOne({ student: order.student, canteen: order.canteen._id || order.canteen })
+             .populate('student', 'name');
+           if (updatedDebt && updatedDebt.limit > 0) {
+             const pct = (updatedDebt.amountOwed / updatedDebt.limit) * 100;
+             if (pct >= 80) {
+               io.to(`canteen:${order.canteen._id || order.canteen}`).emit('debt-threshold', {
+                 studentName: updatedDebt.student?.name || 'A student',
+                 pct,
+                 amountOwed: updatedDebt.amountOwed,
+                 limit: updatedDebt.limit
+               });
+             }
+           }
+         } catch (thresholdErr) {
+           console.error('⚠️ Failed to emit debt-threshold:', thresholdErr.message);
+         }
       }
     }
 

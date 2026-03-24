@@ -1,14 +1,77 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Home, Edit, Wallet, BarChart2, History, HelpCircle, Bell, UserCircle, Settings, LogOut } from 'lucide-react';
-import canteenLogo from '../assets/Canteen_without_bg_logo.png'; 
+import { Menu, Home, Edit, Wallet, BarChart2, History, HelpCircle, Bell, UserCircle, Settings, LogOut, ShoppingBag, CheckCircle, AlertTriangle, IndianRupee, X } from 'lucide-react';
+import canteenLogo from '../assets/Canteen_without_bg_logo.png';
+import { io } from 'socket.io-client'; 
 
 export default function OwnerLayout() {
   const navigate = useNavigate();
   const location = useLocation(); 
 
   const [userProfile, setUserProfile] = useState({ name: "Loading...", role: "Canteen Owner" }); 
-  const [notifications, setNotifications] = useState([]); 
+  const [notifications, setNotifications] = useState([]);
+
+  // Helper to push a new notification
+  const addNotification = useCallback((type, title, message) => {
+    setNotifications(prev => [{
+      id: Date.now(),
+      type,      // 'success' | 'error' | 'warning' | 'info'
+      title,
+      message,
+      time: new Date(),
+      read: false
+    }, ...prev].slice(0, 20));
+  }, []);
+
+  // Socket.IO: Live owner notifications
+  useEffect(() => {
+    const canteenId = sessionStorage.getItem('canteenId');
+    if (!canteenId) return;
+
+    const socket = io('http://localhost:5000');
+    socket.on('connect', () => socket.emit('join-canteen', canteenId));
+
+    // New order placed by a student
+    socket.on('newOrder', (order) => {
+      const studentName = order.student?.name || 'A student';
+      const items = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'an order';
+      addNotification('info', `New Order 🛍️`, `${studentName} placed: ${items} (₹${order.totalAmount})`);
+    });
+
+    // Debt limit warnings — emitted by backend on debt-updated
+    socket.on('debt-threshold', ({ studentName, pct, amountOwed, limit }) => {
+      if (pct >= 100) {
+        addNotification('error', 'Debt Limit Reached!', `${studentName} has hit the ₹${limit} limit (₹${amountOwed} owed). No new orders possible.`);
+      } else if (pct >= 80) {
+        addNotification('warning', 'Debt Warning (80%+)', `${studentName} is at ₹${amountOwed} — ${Math.round(pct)}% of the ₹${limit} limit.`);
+      }
+    });
+
+    // Offline payment received
+    socket.on('debt-updated', () => {
+      // Generic refresh hint; specific events come via debt-threshold
+    });
+
+    return () => socket.disconnect();
+  }, [addNotification]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const clearAll = () => setNotifications([]);
+
+  const notifIcon = (type) => {
+    if (type === 'success') return <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />;
+    if (type === 'error')   return <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />;
+    if (type === 'warning') return <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />;
+    return <ShoppingBag className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />;
+  };
+
+  const timeAgo = (date) => {
+    const diff = Math.floor((Date.now() - new Date(date)) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -136,26 +199,53 @@ export default function OwnerLayout() {
             
             <div className="relative" ref={notificationRef}>
               <Bell onClick={toggleNotifications} className="w-6 h-6 text-gray-700 cursor-pointer hover:text-[#eab308] transition" />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
               {isNotificationsOpen && (
-                <div className="absolute right-0 mt-4 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50">
-                  <div className="p-4 border-b border-gray-100 font-semibold text-gray-800 flex justify-between">
-                    <span>Notifications</span>
-                    {notifications.length > 0 && <span className="text-xs text-[#eab308] cursor-pointer hover:underline">Mark all read</span>}
+                <div className="absolute right-0 mt-4 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                  {/* Header */}
+                  <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-gray-600" />
+                      <span className="font-bold text-gray-800">Notifications</span>
+                      {unreadCount > 0 && <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {notifications.length > 0 && (
+                        <>
+                          <button onClick={markAllRead} className="text-xs text-[#eab308] hover:text-yellow-600 font-semibold cursor-pointer transition">Mark all read</button>
+                          <button onClick={clearAll} className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition">Clear all</button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="p-4 space-y-3">
+                  {/* Notification List */}
+                  <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-50">
                     {notifications.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-2 italic">You have no new notifications.</p>
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <Bell className="w-10 h-10 text-gray-200 mb-3" />
+                        <p className="text-sm font-semibold text-gray-400">You're all caught up!</p>
+                        <p className="text-xs text-gray-300 mt-1">No new notifications</p>
+                      </div>
                     ) : (
-                      notifications.map((notif, index) => (
-                        <div key={index} className="text-sm border-l-4 border-orange-400 pl-3">
-                          <p className="font-semibold text-gray-800">{notif.title}</p>
-                          <p className="text-gray-500 text-xs">{notif.message}</p>
+                      notifications.map((notif) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))}
+                          className={`flex gap-3 px-5 py-4 cursor-pointer transition-colors ${
+                            notif.read ? 'bg-white hover:bg-gray-50' : 'bg-yellow-50/60 hover:bg-yellow-50'
+                          }`}
+                        >
+                          {notifIcon(notif.type)}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold text-gray-800 ${!notif.read ? 'text-gray-900' : ''}`}>{notif.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{notif.message}</p>
+                            <p className="text-[10px] text-gray-400 mt-1 font-medium">{timeAgo(notif.time)}</p>
+                          </div>
+                          {!notif.read && <span className="w-2 h-2 rounded-full bg-[#eab308] shrink-0 mt-1.5"></span>}
                         </div>
                       ))
                     )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, ChevronDown } from 'lucide-react';
+import { AlertTriangle, ChevronDown, X } from 'lucide-react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
@@ -30,10 +30,18 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
 
   const canteenName = order.canteen?.name || 'Unknown Canteen';
   const orderItems = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Unknown Items';
+  const isPending = order.status === 'pending';
 
   return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col mb-4 transition-all duration-200 hover:shadow-md">
-      <div className="flex justify-between items-center">
+    <div
+      className={`bg-white rounded-xl shadow-sm border flex flex-col mb-4 transition-all duration-200 overflow-hidden
+        ${isPending ? 'border-orange-100 hover:shadow-md hover:border-orange-200 cursor-pointer' : 'border-gray-100'}
+        ${isExpanded ? 'shadow-md border-orange-200' : ''}
+      `}
+      onClick={() => isPending && setIsExpanded(!isExpanded)}
+    >
+      {/* Main Row */}
+      <div className="p-5 flex justify-between items-center">
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-1">{orderItems}</h3>
           <p className="text-gray-600 text-sm">
@@ -49,13 +57,8 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
             }`}>
               {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
             </span>
-            {order.status === 'pending' && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400"
-              >
-                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-              </button>
+            {isPending && (
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
             )}
           </div>
           <span className="font-semibold text-blue-900">
@@ -63,31 +66,40 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
           </span>
         </div>
       </div>
-      {isExpanded && order.status === 'pending' && (
-        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+
+      {/* Slide-in Action Panel */}
+      {isPending && isExpanded && (
+        <div
+          className="px-5 pb-4 pt-1 border-t border-orange-50 flex gap-3 bg-orange-50/40"
+          onClick={(e) => e.stopPropagation()} // prevent card toggle when clicking buttons
+        >
           <button
             onClick={() => onChangeOrder(order)}
-            className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+            className="cursor-pointer px-5 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-semibold text-sm rounded-xl transition-colors flex items-center gap-2 border border-indigo-100"
           >
             ✏️ Change Order
           </button>
           <button
             onClick={() => onCancelOrder(order._id)}
-            className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+            className="cursor-pointer px-5 py-2 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-sm rounded-xl transition-colors flex items-center gap-2 border border-red-100"
           >
-            ❌ Cancel
+            ✕ Cancel
           </button>
+          <span className="ml-auto self-center text-xs text-gray-400 italic">Click card to close</span>
         </div>
       )}
     </div>
   );
 };
 
+
 export default function StudDashboard() {
   const navigate = useNavigate();
   const [totalDebt, setTotalDebt] = useState(0);
   const [alerts, setAlerts] = useState([]);
   const [currentOrders, setCurrentOrders] = useState([]);
+  const [cancelConfirm, setCancelConfirm] = useState({ isOpen: false, orderId: null });
+  const [errorToast, setErrorToast] = useState(null);
 
   const fetchTotalDebt = async () => {
     try {
@@ -167,16 +179,25 @@ export default function StudDashboard() {
     };
   }, []);
 
-  const handleCancelOrder = async (orderId) => {
-    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+  // Opens custom confirm modal instead of window.confirm()
+  const handleCancelOrder = (orderId) => {
+    setCancelConfirm({ isOpen: true, orderId });
+  };
+
+  const confirmCancel = async () => {
+    const orderId = cancelConfirm.orderId;
+    setCancelConfirm({ isOpen: false, orderId: null });
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       await axios.patch(`http://localhost:5000/api/orders/${orderId}/cancel`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCurrentOrders(prev => prev.filter(o => o._id !== orderId));
+      setCurrentOrders(prev => prev.map(o =>
+        o._id === orderId ? { ...o, status: 'cancelled' } : o
+      ));
     } catch (err) {
-      alert(err.response?.data?.message || "Error cancelling order");
+      setErrorToast(err.response?.data?.message || "Error cancelling order");
+      setTimeout(() => setErrorToast(null), 4000);
     }
   };
 
@@ -261,6 +282,52 @@ export default function StudDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── CANCEL CONFIRMATION MODAL ── */}
+      {cancelConfirm.isOpen && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 relative border border-gray-100">
+            <button
+              onClick={() => setCancelConfirm({ isOpen: false, orderId: null })}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="bg-red-50 p-4 rounded-full">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Cancel Order?</h2>
+              <p className="text-gray-500 text-sm">This action cannot be undone. Are you sure you want to cancel this order?</p>
+              <div className="flex gap-3 w-full mt-2">
+                <button
+                  onClick={() => setCancelConfirm({ isOpen: false, orderId: null })}
+                  className="cursor-pointer flex-1 py-2.5 rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50 transition text-sm"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={confirmCancel}
+                  className="cursor-pointer flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition text-sm shadow-sm"
+                >
+                  Yes, Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ERROR TOAST ── */}
+      {errorToast && (
+        <div className="fixed bottom-8 right-8 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl bg-red-500 text-white font-medium">
+          <AlertTriangle className="w-5 h-5" />
+          {errorToast}
+          <button onClick={() => setErrorToast(null)} className="ml-4 text-white/70 hover:text-white cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </main>
   );
-}
+}

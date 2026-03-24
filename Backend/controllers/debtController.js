@@ -155,6 +155,16 @@ ${canteenName} & The Credit Snap Team`;
         subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`, 
         message: emailMessage
       });
+
+      // 📡 Emit real-time bell notification to the student's browser
+      const io = req.app.get('io');
+      if (io && debt.student._id) {
+        io.to(`student:${debt.student._id}`).emit('notify-student', {
+          canteenName,
+          amountOwed: debt.amountOwed
+        });
+      }
+
       res.status(200).json({
         status: 'success',
         message: `Notification sent to ${debt.student.name} from ${canteenName}`
