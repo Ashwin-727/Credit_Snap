@@ -85,7 +85,7 @@ export default function ViewDebts() {
             id: d._id,
             name: d.canteen?.name || "Unknown Canteen",
             currentDebt: d.amountOwed,
-            limit: 3000, // Hardcoded for now, can be pulled from user limit later
+            limit: d.limit || 3000, // ✅ Dynamic: reads the per-canteen limit set by the owner
           }));
           setDebts(mappedData);
         }

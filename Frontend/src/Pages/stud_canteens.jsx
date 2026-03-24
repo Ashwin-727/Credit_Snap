@@ -12,7 +12,9 @@ import {
   ShoppingCart,
   AlertTriangle,
   ChevronsUpDown,
-  ChevronDown
+  ChevronDown,
+  CheckCircle,
+  X
 } from 'lucide-react';
 
 const StudentCanteens = () => {
@@ -24,6 +26,7 @@ const StudentCanteens = () => {
   const [selectedCanteen, setSelectedCanteen] = useState(null);
   const [cart, setCart] = useState({});
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [currentFilter, setCurrentFilter] = useState("all");
@@ -60,6 +63,14 @@ const StudentCanteens = () => {
 
         // 2. Check if we arrived here from "Change Order" via Router State
         const navState = location.state;
+        
+        // 2a. If the sidebar "Canteens" link was clicked — always reset to list view
+        if (navState && navState.reset) {
+          setStep('list');
+          setSelectedCanteen(null);
+          setCart({});
+          return;
+        }
         
         if (navState && navState.isChangingOrder && canteens.length > 0) {
           const autoCanteenId = navState.canteenId;
@@ -188,7 +199,8 @@ const StudentCanteens = () => {
       });
 
       if (response.data.status === 'success') {
-        alert(`Success! Request sent to ${selectedCanteen.name}`);
+        setToast(`Order sent to ${selectedCanteen.name}!`);
+        setTimeout(() => setToast(null), 3500);
         goToList();
       }
     } catch (err) {
@@ -525,6 +537,19 @@ const StudentCanteens = () => {
           >
             Review Order
           </button>
+        </div>
+      )}
+
+      {/* GREEN SUCCESS TOAST */}
+      {toast && (
+        <div className="fixed bottom-8 right-8 z-50">
+          <div className="flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl text-white font-medium bg-green-600">
+            <CheckCircle className="w-5 h-5" />
+            {toast}
+            <button onClick={() => setToast(null)} className="ml-4 text-white/70 hover:text-white transition cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       )}
     </main>
