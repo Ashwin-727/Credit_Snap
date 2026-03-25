@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Search, ChevronDown, ArrowDownUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { Search, ChevronDown, ArrowDownUp, AlertTriangle, Loader2, X } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -24,7 +24,7 @@ const loadRazorpayScript = () => {
   return razorpayScriptPromise;
 };
 
-const DebtCard = ({ data, onClearDebt, isPaying }) => (
+const DebtCard = ({ data, onPayDebt, isPaying }) => (
   <div className="bg-white rounded-xl mb-4 p-6 flex justify-between items-center shadow-sm border border-gray-100 transition-all overflow-hidden hover:shadow-md">
     <div>
       <h2 className="text-2xl font-medium text-black mb-1">{data.name}</h2>
@@ -38,9 +38,9 @@ const DebtCard = ({ data, onClearDebt, isPaying }) => (
         <button
           className={`text-white px-6 py-2 rounded-xl text-sm font-medium transition cursor-pointer ${isPaying ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#6366f1] hover:bg-[#4f46e5]'}`}
           disabled={isPaying}
-          onClick={() => onClearDebt(data)}
+          onClick={() => onPayDebt(data)}
         >
-          {isPaying ? 'Opening Payment...' : 'Clear Debt'}
+          {isPaying ? 'Processing...' : 'Pay Debt'}
         </button>
       ) : (
         <div className="bg-[#D1FAE5] text-[#065F46] px-6 py-2 rounded-full font-medium text-sm">
@@ -60,6 +60,8 @@ export default function ViewDebts() {
 
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [activeSort, setActiveSort] = useState('A-Z');
+
+  const [payModal, setPayModal] = useState({ isOpen: false, debt: null, amount: '' });
 
   const sortRef = useRef(null);
 
@@ -129,7 +131,38 @@ export default function ViewDebts() {
     return undefined;
   }, []);
 
-  const handleClearDebt = async (debt) => {
+  const openPayModal = (debt) => {
+    setPayModal({ isOpen: true, debt: debt, amount: debt.currentDebt.toString() });
+  };
+
+  const closePayModal = () => {
+    setPayModal({ isOpen: false, debt: null, amount: '' });
+  };
+
+  const confirmPayment = async () => {
+    const paymentAmount = parseFloat(payModal.amount);
+    const targetDebt = payModal.debt;
+
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      showAlert("Invalid Amount", "Please enter a valid amount greater than 0.", "error");
+      return;
+    }
+    if (paymentAmount > targetDebt.currentDebt) {
+      showAlert("Amount Exceeds Debt", `Amount cannot exceed the total debt of ₹${targetDebt.currentDebt}!`, "error");
+      return;
+    }
+
+    closePayModal();
+    await handlePayDebt(targetDebt, paymentAmount);
+  };
+
+  // Check if payment amount is valid
+  const isPaymentAmountValid = () => {
+    const amount = parseFloat(payModal.amount);
+    return !isNaN(amount) && amount > 0 && amount <= (payModal.debt?.currentDebt || 0);
+  };
+
+  const handlePayDebt = async (debt, amount = null) => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
     if (!token) {
@@ -147,7 +180,7 @@ export default function ViewDebts() {
 
       const createOrderRes = await axios.post(
         `http://localhost:5000/api/payments/debts/${debt.id}/create-order`,
-        { amount: debt.currentDebt },
+        { amount: amount || debt.currentDebt },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -283,7 +316,7 @@ export default function ViewDebts() {
             <DebtCard
               key={canteen.id}
               data={canteen}
-              onClearDebt={handleClearDebt}
+              onPayDebt={openPayModal}
               isPaying={payingDebtId === canteen.id}
             />
           ))
@@ -303,6 +336,79 @@ export default function ViewDebts() {
           </div>
         )}
       </div>
+
+      {/* PAYMENT AMOUNT MODAL */}
+      {payModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+            <button
+              onClick={closePayModal}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Pay Debt</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Enter the amount you want to pay for <strong>{payModal.debt?.name}</strong>.
+            </p>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <p className="text-sm text-gray-600 mb-2">Current Debt</p>
+              <p className="text-2xl font-bold text-gray-900">₹{payModal.debt?.currentDebt}</p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <input
+                  type="number"
+                  value={payModal.amount}
+                  onChange={(e) => setPayModal({ ...payModal, amount: e.target.value })}
+                  className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-[#6366f1] outline-none text-lg transition-colors ${
+                    !isPaymentAmountValid() && payModal.amount
+                      ? 'border-red-300 focus:ring-red-200 bg-red-50'
+                      : 'border-gray-300 focus:ring-[#6366f1]'
+                  }`}
+                  placeholder="Enter amount"
+                  min="1"
+                  max={payModal.debt?.currentDebt}
+                  autoFocus
+                />
+              </div>
+              {!isPaymentAmountValid() && payModal.amount && (
+                <p className="text-xs text-red-600 mt-1">
+                  Amount must be between ₹1 and ₹{payModal.debt?.currentDebt}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={closePayModal}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPayment}
+                disabled={!isPaymentAmountValid()}
+                className={`flex-1 font-medium py-3 rounded-lg transition ${
+                  isPaymentAmountValid()
+                    ? 'bg-[#6366f1] hover:bg-[#4f46e5] text-white cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Pay Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
