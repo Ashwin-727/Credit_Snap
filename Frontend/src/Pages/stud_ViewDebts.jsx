@@ -3,8 +3,28 @@ import axios from 'axios';
 import { Search, ChevronDown, Filter, ArrowDownUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 import { io } from 'socket.io-client';
 
+let razorpayScriptPromise;
+
+const loadRazorpayScript = () => {
+  if (window.Razorpay) {
+    return Promise.resolve(true);
+  }
+
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
+
+  return razorpayScriptPromise;
+};
+
 // Sub-component for individual Canteen Debt Cards
-const DebtCard = ({ data }) => {
+const DebtCard = ({ data, onClearDebt, isPaying }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -27,13 +47,14 @@ const DebtCard = ({ data }) => {
             </p>
             {data.currentDebt > 0 ? (
               <button 
-                className="bg-[#6366f1] hover:bg-[#4f46e5] hover:shadow-lg hover:shadow-indigo-500/20 text-white px-5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                className={`text-white px-5 py-2 rounded-xl text-xs font-bold tracking-wide transition-all transform active:translate-y-0 cursor-pointer ${isPaying ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#6366f1] hover:bg-[#4f46e5] hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5'}`}
+                disabled={isPaying}
                 onClick={(e) => {
                   e.stopPropagation();
-                  alert(`Clearing debt for ${data.name} will be integrated later!`);
+                  onClearDebt(data);
                 }}
               >
-                Clear Debt
+                {isPaying ? 'Opening Payment...' : 'Clear Debt'}
               </button>
             ) : (
               <div className="bg-green-50 border border-green-200 text-green-700 px-5 py-2 rounded-xl text-xs font-bold tracking-wide">
@@ -97,6 +118,7 @@ const DebtCard = ({ data }) => {
 export default function ViewDebts() {
   const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [payingDebtId, setPayingDebtId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Dropdown States
@@ -119,42 +141,38 @@ export default function ViewDebts() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 1. FETCH STUDENT DEBTS FROM BACKEND
-  useEffect(() => {
-    const fetchMyDebts = async () => {
-      try {
-        // 🚨 THE FIX: Check both storages just in case!
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        
-        if (!token) {
-          console.error("NO TOKEN FOUND IN BROWSER!");
-          setLoading(false);
-          return;
-        }
-
-        const res = await axios.get('http://localhost:5000/api/debts/my-debts', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (res.data.status === 'success') {
-          console.log("MY DEBTS:", res.data.data); // Let's see what we get!
-          const mappedData = res.data.data.map(d => ({
-            id: d._id,
-            name: d.canteen?.name || "Unknown Canteen",
-            currentDebt: d.amountOwed,
-            limit: 3000, 
-            totalPaid: 0, 
-            transactions: [] 
-          }));
-          setDebts(mappedData);
-        }
-      } catch (err) {
-        console.error("Failed to fetch debts", err);
-      } finally {
-        setLoading(false);
+  const fetchMyDebts = async () => {
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      if (!token) {
+        console.error("NO TOKEN FOUND IN BROWSER!");
+        return;
       }
-    };
 
+      const res = await axios.get('http://localhost:5000/api/debts/my-debts', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data.status === 'success') {
+        const mappedData = res.data.data.map(d => ({
+          id: d._id,
+          name: d.canteen?.name || "Unknown Canteen",
+          currentDebt: d.amountOwed,
+          limit: 3000,
+          totalPaid: 0,
+          transactions: []
+        }));
+        setDebts(mappedData);
+      }
+    } catch (err) {
+      console.error("Failed to fetch debts", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchMyDebts();
 
     const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -180,6 +198,77 @@ export default function ViewDebts() {
       }
     }
   }, []);
+
+  const handleClearDebt = async (debt) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+
+    if (!token) {
+      alert('Please log in again to continue.');
+      return;
+    }
+
+    setPayingDebtId(debt.id);
+
+    try {
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Razorpay checkout could not be loaded. Please check your internet connection and try again.');
+      }
+
+      const createOrderRes = await axios.post(
+        `http://localhost:5000/api/payments/debts/${debt.id}/create-order`,
+        { amount: debt.currentDebt },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const checkoutData = createOrderRes.data.data;
+      const razorpay = new window.Razorpay({
+        key: checkoutData.keyId,
+        amount: checkoutData.amount,
+        currency: checkoutData.currency,
+        name: checkoutData.merchantName,
+        description: checkoutData.description,
+        order_id: checkoutData.orderId,
+        prefill: checkoutData.prefill,
+        theme: {
+          color: '#f97316'
+        },
+        handler: async (response) => {
+          try {
+            await axios.post(
+              'http://localhost:5000/api/payments/verify',
+              {
+                paymentRecordId: checkoutData.paymentRecordId,
+                ...response
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            await fetchMyDebts();
+            alert(`Payment successful! Your debt for ${debt.name} has been updated.`);
+          } catch (error) {
+            alert(error.response?.data?.message || 'Payment was authorized, but verification failed. Please contact support.');
+          } finally {
+            setPayingDebtId(null);
+          }
+        },
+        modal: {
+          ondismiss: () => setPayingDebtId(null)
+        }
+      });
+
+      razorpay.on('payment.failed', (response) => {
+        const failureMessage = response.error?.description || 'Payment failed. Please try again.';
+        alert(failureMessage);
+        setPayingDebtId(null);
+      });
+
+      razorpay.open();
+    } catch (error) {
+      alert(error.response?.data?.message || error.message || 'Unable to start Razorpay checkout right now.');
+      setPayingDebtId(null);
+    }
+  };
 
   // --- LOGIC: Filter and Sort ---
   let processedDebts = [...debts];
@@ -303,7 +392,12 @@ export default function ViewDebts() {
       <div className="flex flex-col relative z-0 max-w-5xl mx-auto">
         {processedDebts.length > 0 ? (
           processedDebts.map((canteen) => (
-            <DebtCard key={canteen.id} data={canteen} />
+            <DebtCard
+              key={canteen.id}
+              data={canteen}
+              onClearDebt={handleClearDebt}
+              isPaying={payingDebtId === canteen.id}
+            />
           ))
         ) : (
           <div className="bg-white rounded-3xl p-12 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-3 mt-4 min-h-[300px]">

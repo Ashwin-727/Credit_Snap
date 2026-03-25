@@ -1,8 +1,8 @@
 const Debt = require('../models/debtModel');
-const Order = require('../models/ordersModel'); // 👈 ADD THIS LINE
 const sendEmail = require('../utils/sendEmail');
 
 const Canteen = require('../models/canteenModel'); // 👈 Make sure Canteen is imported!
+const { settleDebtPayment } = require('../utils/debtPayments');
 
 // Get all active debts for the logged-in owner's canteen
 exports.getActiveDebts = async (req, res) => {
@@ -48,28 +48,13 @@ exports.payOffline = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: `Amount exceeds current debt! The maximum deduction is ₹${debt.amountOwed}.` });
     }
 
-    // 1️⃣ Update the specific Canteen Debt Ticket
-    debt.amountOwed = debt.amountOwed - amountPaid;
-    await debt.save();
-
-    // 2️⃣ Update the Student's overall totalDebt in the Users collection
-    const student = debt.student; 
-    student.totalDebt = student.totalDebt - amountPaid;
-    if (student.totalDebt < 0) student.totalDebt = 0; 
-    await student.save();
-
-    // 3️⃣ NEW: Create a "Receipt" in the Orders collection for the History page!
-    await Order.create({
-      student: student._id,
-      canteen: debt.canteen,
-      items: [{
-        name: 'Offline Debt Payment', // Identifies this as a payment, not food!
-        quantity: 1,
-        price: amountPaid
-      }],
-      totalAmount: amountPaid,
-      status: 'accepted' // Automatically accepted so it gets the green tag in the UI
+    const settlement = await settleDebtPayment({
+      debt,
+      amountPaid,
+      receiptLabel: 'Offline Debt Payment'
     });
+
+    const student = debt.student;
 
     // 4️⃣ EMIT TO SOCKET.IO ROOMS SO IT UPDATES LIVE
     const io = req.app.get('io');
@@ -85,10 +70,7 @@ exports.payOffline = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: `Successfully deducted ₹${amountPaid} and recorded the transaction in History.`,
-      data: { 
-        canteenDebt: debt.amountOwed,
-        studentTotalDebt: student.totalDebt
-      }
+      data: settlement
     });
 
   } catch (err) {

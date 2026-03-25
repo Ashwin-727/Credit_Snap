@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
+import { io } from 'socket.io-client';
 import { History, Search, ChevronDown, Filter, ArrowUpDown } from 'lucide-react';
 
 const parseDateTime = (dateStr, timeStr) => {
@@ -20,6 +22,9 @@ const parseDateTime = (dateStr, timeStr) => {
 export default function StudHistory() {
   const [activeTab, setActiveTab] = useState('order'); 
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [orderHistoryData, setOrderHistoryData] = useState([]);
+  const [debtHistoryData, setDebtHistoryData] = useState([]);
   
   // Dropdowns
   const [isSortOpen, setIsSortOpen] = useState(false);
@@ -42,18 +47,95 @@ export default function StudHistory() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const [orderHistoryData] = useState([
-    { id: 1, items: 'Samosa x2, Chai x1', canteen: 'Hall 3 Canteen', amount: 26, date: 'Today', time: '4:35pm', status: 'Accepted' },
-    { id: 2, items: 'Chicken Biryani x2, Masala Dosa x4', canteen: 'Hall 10 Canteen', amount: 400, date: 'Yesterday', time: '11:50pm', status: 'Rejected' },
-    { id: 3, items: 'Chicken Macroni x2, Coke x2', canteen: 'Hall 10 Canteen', amount: 160, date: 'Yesterday', time: '8:20pm', status: 'Accepted' },
-    { id: 4, items: 'Matar Mushroom x1, Butter Roti x4, Sprite x1', canteen: 'Hall 7 Canteen', amount: 100, date: '20-03-2026', time: '10:30pm', status: 'Accepted' },
-  ]);
+  const fetchHistory = async () => {
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return;
 
-  const [debtHistoryData] = useState([
-    { id: 5, canteen: 'Hall 1 Canteen', amount: 1500, date: '22-03-2026', time: '10:15am' },
-    { id: 6, canteen: 'Hall 3 Canteen', amount: 850, date: '18-03-2026', time: '2:30pm' },
-    { id: 7, canteen: 'Hall 10 Canteen', amount: 400, date: '15-03-2026', time: '6:45pm' },
-  ]);
+      const res = await axios.get('http://localhost:5000/api/orders/my-active-orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data.status === 'success') {
+        const orders = res.data.data || [];
+
+        const formattedOrders = [];
+        const formattedDebtPayments = [];
+
+        orders.forEach((order) => {
+          const createdAt = new Date(order.createdAt);
+          const day = String(createdAt.getDate()).padStart(2, '0');
+          const month = String(createdAt.getMonth() + 1).padStart(2, '0');
+          const year = createdAt.getFullYear();
+          const formattedDate = `${day}-${month}-${year}`;
+          const formattedTime = createdAt.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+
+          const firstItemName = order.items?.[0]?.name || '';
+          const isDebtPayment = firstItemName === 'Offline Debt Payment' || firstItemName === 'Online Debt Payment';
+
+          if (isDebtPayment) {
+            formattedDebtPayments.push({
+              id: order._id,
+              canteen: order.canteen?.name || 'Unknown Canteen',
+              amount: order.totalAmount,
+              date: formattedDate,
+              time: formattedTime
+            });
+            return;
+          }
+
+          formattedOrders.push({
+            id: order._id,
+            items: order.items?.map((item) => `${item.name} x${item.quantity}`).join(', ') || 'Order',
+            canteen: order.canteen?.name || 'Unknown Canteen',
+            amount: order.totalAmount,
+            date: formattedDate,
+            time: formattedTime,
+            status: order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'Pending'
+          });
+        });
+
+        setOrderHistoryData(formattedOrders);
+        setDebtHistoryData(formattedDebtPayments);
+      }
+    } catch (error) {
+      console.error('Failed to load student history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  useEffect(() => {
+    const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+    if (!userStr) return;
+
+    const user = JSON.parse(userStr);
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      socket.emit('join-student', user._id);
+    });
+
+    socket.on('orderStatusUpdated', () => {
+      fetchHistory();
+    });
+
+    socket.on('debt-updated', () => {
+      fetchHistory();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const activeData = activeTab === 'order' ? orderHistoryData : debtHistoryData;
   const uniqueCanteens = [...new Set(activeData.map(item => item.canteen))];
@@ -80,6 +162,20 @@ export default function StudHistory() {
       }
       return 0;
     });
+  }
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-8 max-w-5xl mx-auto bg-[#f8f9fa] min-h-screen">
+        <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[350px]">
+          <div className="bg-gray-50 p-4 rounded-full mb-4">
+            <History className="w-10 h-10 text-gray-400" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Loading History...</h2>
+          <p className="text-gray-500 text-sm font-medium">Fetching your latest transactions.</p>
+        </div>
+      </div>
+    );
   }
 
   return (

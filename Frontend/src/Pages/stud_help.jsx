@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function StudentHelp() {
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndexes, setOpenIndexes] = useState([0]);
 
   const faqs = [
     {
@@ -28,7 +28,11 @@ export default function StudentHelp() {
   ];
 
   const toggleFaq = (index) => {
-    setOpenIndex(openIndex === index ? null : index);
+    setOpenIndexes((currentIndexes) => (
+      currentIndexes.includes(index)
+        ? currentIndexes.filter((currentIndex) => currentIndex !== index)
+        : [...currentIndexes, index]
+    ));
   };
 
   return (
@@ -42,14 +46,14 @@ export default function StudentHelp() {
           {faqs.map((faq, index) => (
             <div 
               key={index} 
-              className={`border-b border-gray-200 last:border-0 ${openIndex === index ? 'bg-white' : ''}`}
+              className={`border-b border-gray-200 last:border-0 ${openIndexes.includes(index) ? 'bg-white' : ''}`}
             >
               <button
                 onClick={() => toggleFaq(index)}
                 className="w-full text-left px-8 py-4 flex justify-between items-center focus:outline-none hover:bg-gray-50 transition-colors"
               >
                 <span className="font-medium text-lg lg:text-xl text-gray-800">{faq.question}</span>
-                {openIndex === index ? (
+                {openIndexes.includes(index) ? (
                   <ChevronDown className="w-6 h-6 text-gray-800 flex-shrink-0" />
                 ) : (
                   <ChevronRight className="w-6 h-6 text-gray-800 flex-shrink-0" />
@@ -57,7 +61,7 @@ export default function StudentHelp() {
               </button>
               
               {/* Expanded Content */}
-              {openIndex === index && (
+              {openIndexes.includes(index) && (
                 <div className="px-8 pb-5 text-gray-600 text-[15px] lg:text-base leading-relaxed pr-12">
                   {faq.answer}
                 </div>
