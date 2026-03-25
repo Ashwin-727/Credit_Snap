@@ -12,7 +12,8 @@ const app = express();
 
 // 1. Middlewares
 app.use(cors()); // Allows your React frontend to talk to this backend
-app.use(express.json()); // Allows your server to understand JSON data
+app.use(express.json({ limit: '10mb' })); // Allows your server to understand JSON data
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Hook up the routes!
 app.use('/api/canteens', canteenRoutes); // Your work
