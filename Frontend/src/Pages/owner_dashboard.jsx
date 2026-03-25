@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
+import { useNotifications } from '../context/NotificationContext';
 
 export default function OwnerDashboard() {
+  const { showAlert } = useNotifications();
   // ==========================================
   // 1. CANTEEN DATABASE STATE (Integrated)
   // ==========================================
@@ -41,7 +43,7 @@ export default function OwnerDashboard() {
 
       if (response.data.status === 'success') {
         const actualOrders = response.data.data.filter(
-          order => !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
+          order => !order.isCleared && !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
         );
         setOrders(actualOrders);
       }
@@ -87,7 +89,7 @@ export default function OwnerDashboard() {
   // ==========================================
   const toggleStatus = async () => {
     if (!canteen) {
-      alert("⚠️ ERROR: Cannot toggle status! Your Owner account does not have a Canteen registered in the MongoDB database yet. Please run the backend fix script.");
+      showAlert("Account Error", "Your Owner account does not have a Canteen registered in the database yet. Please contact support or run the fix script.", "error");
       return;
     }
     try {
@@ -114,16 +116,37 @@ export default function OwnerDashboard() {
         fetchOrders();
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to update order");
+      showAlert("Update Failed", err.response?.data?.message || "Failed to update order status.", "error");
     }
   };
 
-  const removeOrder = (orderId) => {
-    setOrders(orders.filter(order => order._id !== orderId));
+  const removeOrder = async (orderId) => {
+    try {
+      const token = sessionStorage.getItem('token');
+      await axios.patch('http://localhost:5000/api/orders/clear', 
+        { orderIds: [orderId] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setOrders(orders.filter(order => order._id !== orderId));
+    } catch (err) {
+      showAlert("Error", err.response?.data?.message || "Failed to clear order.", "error");
+    }
   };
 
-  const clearAllOrders = () => {
-    setOrders(orders.filter(order => order.status === 'pending'));
+  const clearAllOrders = async () => {
+    const idsToClear = orders.filter(o => o.status !== 'pending').map(o => o._id);
+    if (idsToClear.length === 0) return;
+    
+    try {
+      const token = sessionStorage.getItem('token');
+      await axios.patch('http://localhost:5000/api/orders/clear', 
+        { orderIds: idsToClear },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setOrders(orders.filter(order => order.status === 'pending'));
+    } catch (err) {
+      showAlert("Error", err.response?.data?.message || "Failed to clear orders.", "error");
+    }
   };
 
   // ==========================================
@@ -408,7 +431,7 @@ export default function OwnerDashboard() {
                   </div>
                 ) : (
                   <span className="debt-badge">
-                    {order.status === 'accepted' ? 'Added to debt' : 'Rejected'}
+                    {order.status === 'accepted' ? 'Added to debt' : order.status === 'cancelled' ? 'Cancelled' : 'Rejected'}
                   </span>
                 )}
               </div>

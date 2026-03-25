@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import { History, Search, ChevronDown, ShoppingBag, Calendar, Clock } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { History, Search, ChevronDown, Filter, ArrowUpDown } from 'lucide-react';
 
 const parseDateTime = (dateStr, timeStr) => {
   if (dateStr.toLowerCase().includes('today')) return new Date();
@@ -10,65 +10,62 @@ const parseDateTime = (dateStr, timeStr) => {
     d.setDate(d.getDate() - 1);
     return d;
   }
-  
+
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     const [day, month, year] = parts;
     return new Date(`${year}-${month}-${day} ${timeStr}`);
   }
-  return new Date(); 
+  return new Date();
 };
 
 export default function StudHistory() {
-  const [activeTab, setActiveTab] = useState('order'); 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('order');
+  const [search, setSearch] = useState('');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState('default');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCanteen, setFilterCanteen] = useState('');
+  const [historyData, setHistoryData] = useState({ orders: [], debts: [] });
   const [loading, setLoading] = useState(true);
-  const [orderHistoryData, setOrderHistoryData] = useState([]);
-  const [debtHistoryData, setDebtHistoryData] = useState([]);
-  
-  // Dropdowns
-  const [isSortOpen, setIsSortOpen] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
-  // States
-  const [sortConfig, setSortConfig] = useState(''); 
-  const [filterStatus, setFilterStatus] = useState(''); 
-  const [filterCanteen, setFilterCanteen] = useState(''); 
 
   const sortRef = useRef(null);
   const filterRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (sortRef.current && !sortRef.current.contains(event.target)) setIsSortOpen(false);
-      if (filterRef.current && !filterRef.current.contains(event.target)) setIsFilterOpen(false);
+      if (sortRef.current && !sortRef.current.contains(event.target)) setSortOpen(false);
+      if (filterRef.current && !filterRef.current.contains(event.target)) setFilterOpen(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchHistory = async () => {
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
       const res = await axios.get('http://localhost:5000/api/orders/my-active-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       if (res.data.status === 'success') {
-        const orders = res.data.data || [];
+        const allOrders = res.data.data || [];
 
         const formattedOrders = [];
-        const formattedDebtPayments = [];
+        const formattedDebts = [];
 
-        orders.forEach((order) => {
-          const createdAt = new Date(order.createdAt);
-          const day = String(createdAt.getDate()).padStart(2, '0');
-          const month = String(createdAt.getMonth() + 1).padStart(2, '0');
-          const year = createdAt.getFullYear();
-          const formattedDate = `${day}-${month}-${year}`;
-          const formattedTime = createdAt.toLocaleTimeString('en-US', {
+        allOrders.forEach((order) => {
+          const dateObj = new Date(order.createdAt);
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const year = dateObj.getFullYear();
+          const timeStr = dateObj.toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true
@@ -77,33 +74,37 @@ export default function StudHistory() {
           const firstItemName = order.items?.[0]?.name || '';
           const isDebtPayment = firstItemName === 'Offline Debt Payment' || firstItemName === 'Online Debt Payment';
 
+          const baseData = {
+            id: order._id,
+            canteen: order.canteen?.name || 'Unknown Canteen',
+            amount: order.totalAmount,
+            date: `${day}-${month}-${year}`,
+            time: timeStr
+          };
+
           if (isDebtPayment) {
-            formattedDebtPayments.push({
-              id: order._id,
-              canteen: order.canteen?.name || 'Unknown Canteen',
-              amount: order.totalAmount,
-              date: formattedDate,
-              time: formattedTime
-            });
+            formattedDebts.push(baseData);
+            return;
+          }
+
+          if (!['accepted', 'rejected', 'cancelled'].includes(order.status)) {
             return;
           }
 
           formattedOrders.push({
-            id: order._id,
-            items: order.items?.map((item) => `${item.name} x${item.quantity}`).join(', ') || 'Order',
-            canteen: order.canteen?.name || 'Unknown Canteen',
-            amount: order.totalAmount,
-            date: formattedDate,
-            time: formattedTime,
-            status: order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'Pending'
+            ...baseData,
+            items: order.items?.map((item) => `${item.name} x${item.quantity}`).join(', ') || 'Items',
+            status: order.status.charAt(0).toUpperCase() + order.status.slice(1)
           });
         });
 
-        setOrderHistoryData(formattedOrders);
-        setDebtHistoryData(formattedDebtPayments);
+        setHistoryData({
+          orders: formattedOrders,
+          debts: formattedDebts
+        });
       }
-    } catch (error) {
-      console.error('Failed to load student history:', error);
+    } catch (err) {
+      console.error('Failed to load history:', err);
     } finally {
       setLoading(false);
     }
@@ -111,58 +112,63 @@ export default function StudHistory() {
 
   useEffect(() => {
     fetchHistory();
-  }, []);
 
-  useEffect(() => {
     const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-    if (!userStr) return;
+    if (!userStr) return undefined;
 
-    const user = JSON.parse(userStr);
-    const socket = io('http://localhost:5000');
-
-    socket.on('connect', () => {
-      socket.emit('join-student', user._id);
-    });
-
-    socket.on('orderStatusUpdated', () => {
-      fetchHistory();
-    });
-
-    socket.on('debt-updated', () => {
-      fetchHistory();
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    try {
+      const user = JSON.parse(userStr);
+      const socket = io('http://localhost:5000');
+      socket.on('connect', () => socket.emit('join-student', user._id));
+      socket.on('debt-updated', () => fetchHistory());
+      socket.on('orderStatusUpdated', () => fetchHistory());
+      return () => socket.disconnect();
+    } catch (e) {
+      console.error('Socket err:', e);
+      return undefined;
+    }
   }, []);
 
-  const activeData = activeTab === 'order' ? orderHistoryData : debtHistoryData;
-  const uniqueCanteens = [...new Set(activeData.map(item => item.canteen))];
+  const activeData = activeTab === 'order' ? historyData.orders : historyData.debts;
+  const uniqueCanteens = [...new Set(activeData.map((item) => item.canteen))];
 
-  let processedData = activeData.filter(record => {
-    const matchesSearch = 
-      record.canteen.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (record.items && record.items.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+  let list = activeData.filter((record) => {
+    const matchesSearch =
+      record.canteen.toLowerCase().includes(search.toLowerCase()) ||
+      (record.items && record.items.toLowerCase().includes(search.toLowerCase()));
+
     const matchesStatus = (filterStatus === '' || activeTab === 'debt') ? true : record.status === filterStatus;
     const matchesCanteen = filterCanteen === '' ? true : record.canteen === filterCanteen;
-    
+
     return matchesSearch && matchesStatus && matchesCanteen;
   });
 
-  if (sortConfig) {
-    processedData.sort((a, b) => {
+  if (sortConfig !== 'default') {
+    list = [...list].sort((a, b) => {
       if (sortConfig.includes('date')) {
         const dateA = parseDateTime(a.date, a.time);
         const dateB = parseDateTime(b.date, b.time);
         return sortConfig === 'date_desc' ? dateB - dateA : dateA - dateB;
-      } else if (sortConfig.includes('price')) {
-        return sortConfig === 'price_desc' ? b.amount - a.amount : a.amount - b.amount;
+      }
+      if (sortConfig.includes('amount')) {
+        return sortConfig === 'amount_desc' ? b.amount - a.amount : a.amount - b.amount;
       }
       return 0;
     });
   }
+
+  const getSortText = () => {
+    if (sortConfig === 'date_desc') return 'Recent (Newest First)';
+    if (sortConfig === 'date_asc') return 'Recent (Oldest First)';
+    if (sortConfig === 'amount_desc') return 'Amount: High -> Low';
+    if (sortConfig === 'amount_asc') return 'Amount: Low -> High';
+    return 'Sort by';
+  };
+
+  const getFilterText = () => {
+    if (filterStatus || filterCanteen) return 'Filtered';
+    return 'Filter by';
+  };
 
   if (loading) {
     return (
@@ -179,170 +185,164 @@ export default function StudHistory() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto bg-[#f8f9fa] min-h-screen">
-      
-      {/* ========================================================
-        TOP ACTION BAR - EXACTLY MATCHING YOUR REFERENCE IMAGE
-        ========================================================
-      */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-5 relative z-20">
-        
-        {/* Search Bar: White, pill shape, exact height, subtle shadow */}
-        <div className="flex items-center bg-white border border-gray-200 rounded-full px-5 h-11 w-full max-w-[450px] shadow-sm">
-          <Search className="w-4 h-4 text-gray-400 mr-3" />
-          <input 
-            type="text" 
-            placeholder="Search..." 
-            className="w-full outline-none text-sm text-gray-600 bg-transparent placeholder-gray-400"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+    <div className="p-8 pb-32">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center bg-white px-4 py-2.5 rounded-full shadow-sm w-[500px] border border-gray-100 focus-within:border-[#ea580c] transition-colors">
+          <Search className="w-5 h-5 text-gray-400 mr-2" />
+          <input
+            type="text"
+            placeholder={activeTab === 'order' ? 'Search Orders by Item/Canteen' : 'Search Debts by Canteen'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="bg-transparent outline-none w-full text-gray-700"
           />
         </div>
-        
-        <div className="flex gap-4 relative">
-          
-          {/* Filter Dropdown: Orange, rounded-xl, exact height, funnel icon */}
-          <div ref={filterRef}>
-            <button 
-              onClick={() => {setIsFilterOpen(!isFilterOpen); setIsSortOpen(false);}} 
-              className="bg-[#f97316] text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-[#ea580c] transition-colors"
-            >
-               <Filter className="w-4 h-4" /> Filter by <ChevronDown className="w-4 h-4 ml-1" />
+
+        <div className="flex gap-4">
+          <div className="relative" ref={filterRef}>
+            <button onClick={() => { setFilterOpen(!filterOpen); setSortOpen(false); }} className="cursor-pointer bg-[#ea580c] hover:bg-orange-700 text-white font-semibold px-6 py-2.5 rounded-lg shadow-sm flex justify-center items-center gap-2 transition">
+              {getFilterText()} <ChevronDown className="w-4 h-4" />
             </button>
-            {isFilterOpen && (
-              <div className="absolute top-14 right-32 w-64 bg-white border border-gray-100 shadow-xl rounded-2xl p-5 z-50">
-                <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2">Filter Options</h4>
-                
+            {filterOpen && (
+              <div className="absolute right-0 mt-3 w-72 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden p-5">
+                <h4 className="font-semibold text-gray-800 mb-4 border-b pb-2">Filter Options</h4>
+
                 {activeTab === 'order' && (
                   <div className="mb-4">
-                    <label className="text-xs text-gray-500 font-bold mb-2 block tracking-wide uppercase">Status</label>
-                    <select className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none bg-gray-50 focus:border-orange-500 transition-colors"
-                            value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                    <label className="text-xs text-gray-500 font-semibold mb-1.5 block uppercase">Status</label>
+                    <select className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm outline-none bg-gray-50 focus:border-[#ea580c] transition-colors" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                       <option value="">All Statuses</option>
                       <option value="Accepted">Accepted</option>
                       <option value="Rejected">Rejected</option>
+                      <option value="Cancelled">Cancelled</option>
                     </select>
                   </div>
                 )}
 
                 <div className="mb-5">
-                  <label className="text-xs text-gray-500 font-bold mb-2 block tracking-wide uppercase">Canteen Name</label>
-                  <select className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none bg-gray-50 focus:border-orange-500 transition-colors"
-                          value={filterCanteen} onChange={(e) => setFilterCanteen(e.target.value)}>
+                  <label className="text-xs text-gray-500 font-semibold mb-1.5 block uppercase">Canteen Name</label>
+                  <select className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm outline-none bg-gray-50 focus:border-[#ea580c] transition-colors" value={filterCanteen} onChange={(e) => setFilterCanteen(e.target.value)}>
                     <option value="">All Canteens</option>
                     {uniqueCanteens.map((canteenName, i) => (
                       <option key={i} value={canteenName}>{canteenName}</option>
                     ))}
                   </select>
                 </div>
-                
-                <button onClick={() => {setFilterStatus(''); setFilterCanteen('');}} className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline w-full text-center">Clear Filters</button>
+
+                <button onClick={() => { setFilterStatus(''); setFilterCanteen(''); }} className="cursor-pointer text-sm font-semibold text-white bg-gray-400 hover:bg-gray-500 py-2 rounded-md w-full text-center transition">Clear Filters</button>
               </div>
             )}
           </div>
 
-          {/* Sort Dropdown: Orange, rounded-xl, exact height, arrow icon */}
-          <div ref={sortRef}>
-            <button 
-              onClick={() => {setIsSortOpen(!isSortOpen); setIsFilterOpen(false);}} 
-              className="bg-[#f97316] text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-[#ea580c] transition-colors"
-            >
-              <ArrowUpDown className="w-4 h-4" /> Sort by <ChevronDown className="w-4 h-4 ml-1" />
+          <div className="relative" ref={sortRef}>
+            <button onClick={() => { setSortOpen(!sortOpen); setFilterOpen(false); }} className="cursor-pointer bg-[#ea580c] hover:bg-orange-700 text-white font-semibold px-6 py-2.5 rounded-lg shadow-sm flex justify-center items-center gap-2 transition">
+              {getSortText()} <ChevronDown className="w-4 h-4" />
             </button>
-            {isSortOpen && (
-              <div className="absolute top-14 right-0 w-52 bg-white border border-gray-100 shadow-xl rounded-2xl p-2 z-50 flex flex-col">
-                <button onClick={() => setSortConfig('date_desc')} className={`text-left px-4 py-2.5 text-sm rounded-xl transition-colors ${sortConfig === 'date_desc' ? 'bg-orange-50 font-bold text-orange-600' : 'text-gray-700 hover:bg-gray-50'}`}>Recent (Newest)</button>
-                <button onClick={() => setSortConfig('date_asc')} className={`text-left px-4 py-2.5 text-sm rounded-xl transition-colors ${sortConfig === 'date_asc' ? 'bg-orange-50 font-bold text-orange-600' : 'text-gray-700 hover:bg-gray-50'}`}>Recent (Oldest)</button>
-                <div className="border-t my-1 border-gray-100"></div>
-                <button onClick={() => setSortConfig('price_desc')} className={`text-left px-4 py-2.5 text-sm rounded-xl transition-colors ${sortConfig === 'price_desc' ? 'bg-orange-50 font-bold text-orange-600' : 'text-gray-700 hover:bg-gray-50'}`}>Price (High to Low)</button>
-                <button onClick={() => setSortConfig('price_asc')} className={`text-left px-4 py-2.5 text-sm rounded-xl transition-colors ${sortConfig === 'price_asc' ? 'bg-orange-50 font-bold text-orange-600' : 'text-gray-700 hover:bg-gray-50'}`}>Price (Low to High)</button>
-                <button onClick={() => setSortConfig('')} className="text-left px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 mt-1">Clear Sort</button>
+            {sortOpen && (
+              <div className="absolute right-0 mt-3 w-56 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden py-2">
+                <div onClick={() => { setSortConfig('default'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'default' ? 'bg-orange-50 font-semibold text-[#ea580c]' : 'text-gray-700'}`}>Default</div>
+                <div onClick={() => { setSortConfig('date_desc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'date_desc' ? 'bg-orange-50 font-semibold text-[#ea580c]' : 'text-gray-700'}`}>Recent (Newest First)</div>
+                <div onClick={() => { setSortConfig('date_asc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'date_asc' ? 'bg-orange-50 font-semibold text-[#ea580c]' : 'text-gray-700'}`}>Recent (Oldest First)</div>
+                <div className="border-t my-1 border-gray-50"></div>
+                <div onClick={() => { setSortConfig('amount_desc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'amount_desc' ? 'bg-orange-50 font-semibold text-[#ea580c]' : 'text-gray-700'}`}>Amount: High - Low</div>
+                <div onClick={() => { setSortConfig('amount_asc'); setSortOpen(false); }} className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 transition ${sortConfig === 'amount_asc' ? 'bg-orange-50 font-semibold text-[#ea580c]' : 'text-gray-700'}`}>Amount: Low - High</div>
               </div>
             )}
           </div>
-
         </div>
       </div>
 
-      {/* ========================================================
-        BOTTOM SECTION - POLISHED UI
-        ========================================================
-      */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-4xl font-semibold text-gray-900">History</h1>
 
-      {/* Tab Toggle */}
-      <div className="flex bg-gray-200/50 backdrop-blur-sm border border-gray-200/50 rounded-2xl p-1.5 mb-8 shadow-inner relative z-10">
-        <button
-          onClick={() => { setActiveTab('order'); setFilterStatus(''); }}
-          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
-            activeTab === 'order' 
-              ? 'bg-[#ea580c] text-white shadow-md transform scale-[1.01]' 
-              : 'text-gray-500 hover:text-gray-800 hover:bg-white/60'
-          }`}
-        >
-          Order History
-        </button>
-        <button
-          onClick={() => { setActiveTab('debt'); setFilterStatus(''); }}
-          className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
-            activeTab === 'debt' 
-              ? 'bg-[#ea580c] text-white shadow-md transform scale-[1.01]' 
-              : 'text-gray-500 hover:text-gray-800 hover:bg-white/60'
-          }`}
-        >
-          Debt History
-        </button>
+        <div className="flex bg-gray-100 border border-gray-200 rounded-xl p-1 shadow-inner relative z-10 w-[400px]">
+          <button
+            onClick={() => { setActiveTab('order'); }}
+            className={`cursor-pointer flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${
+              activeTab === 'order'
+                ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Order History
+          </button>
+          <button
+            onClick={() => { setActiveTab('debt'); }}
+            className={`cursor-pointer flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${
+              activeTab === 'debt'
+                ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Transaction History
+          </button>
+        </div>
       </div>
 
-      {/* History List */}
-      <div className="space-y-4 relative z-0">
-        {processedData.length === 0 ? (
-           <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[350px]">
-             <div className="bg-gray-50 p-4 rounded-full mb-4">
-               <History className="w-10 h-10 text-gray-400" />
-             </div>
-             <h2 className="text-xl font-bold text-gray-800 mb-2">No Transactions Found</h2>
-             <p className="text-gray-500 text-sm font-medium">Try adjusting your filters or search term.</p>
-           </div>
+      <div className="flex flex-col gap-5 relative">
+        {list.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-3">
+            <History className="w-12 h-12 text-gray-300 mb-2" />
+            <p className="text-2xl font-semibold text-gray-800">No {activeTab === 'order' ? 'Orders' : 'Transactions'} Found</p>
+            <p className="text-gray-500">Try adjusting your filters or search term.</p>
+            {(search || filterStatus || filterCanteen || sortConfig !== 'default') && (
+              <button onClick={() => { setSearch(''); setFilterStatus(''); setFilterCanteen(''); setSortConfig('default'); }} className="cursor-pointer mt-4 bg-[#ea580c] hover:bg-orange-700 text-white font-semibold px-6 py-2.5 rounded-lg transition text-sm">Clear Filters</button>
+            )}
+          </div>
         ) : (
-          processedData.map((record) => (
-            <div key={record.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-xl hover:border-orange-100 hover:-translate-y-1 transition-all duration-300 group min-h-[90px]">
-              
-              {/* Left Side: Items & Details */}
-              <div className="flex flex-col items-start justify-center">
-                <h3 className="text-base font-bold text-gray-800 mb-1.5 group-hover:text-orange-600 transition-colors">
-                  {activeTab === 'order' ? record.items : record.canteen}
-                </h3>
-                <p className="text-xs font-medium text-gray-500">
-                  {activeTab === 'order' ? <span className="text-gray-600">{record.canteen}, </span> : <span className="text-gray-400">Payment made on </span>}
-                  {record.date}, {record.time}
-                </p>
+          list.map((record) => (
+            <div key={record.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition hover:shadow-md">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-xl font-medium text-gray-900">{record.canteen}</h3>
+                  {activeTab === 'order' && record.status && (
+                    <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-md uppercase tracking-wider border ${
+                      record.status === 'Accepted'
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : record.status === 'Cancelled'
+                          ? 'bg-gray-100 text-gray-700 border-gray-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
+                    }`}>
+                      {record.status}
+                    </span>
+                  )}
+                  {activeTab === 'debt' && (
+                    <span className="px-2.5 py-0.5 bg-green-50 text-green-700 text-[11px] font-bold rounded-md uppercase tracking-wider border border-green-200">
+                      Payment Received
+                    </span>
+                  )}
+                </div>
+
+                {activeTab === 'order' ? (
+                  <p className="text-sm text-gray-600 font-medium mt-3 bg-gray-50 px-3 py-2 rounded-lg inline-flex items-center border border-gray-100">
+                    <ShoppingBag className="w-4 h-4 mr-2 text-gray-400" /> {record.items}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500 font-medium mt-2">
+                    Payment successfully processed to {record.canteen}
+                  </p>
+                )}
               </div>
 
-              {/* Right Side: Status & Price */}
-              <div className="flex flex-col items-end justify-center gap-2.5">
-                
-                {record.status && (
-                  <span className={`px-3 py-1 rounded-md text-[11px] font-bold tracking-wider uppercase border ${
-                    record.status === 'Accepted' 
-                      ? 'bg-green-50 text-green-600 border-green-200' 
-                      : 'bg-red-50 text-red-600 border-red-200'
-                  }`}>
-                    {record.status}
-                  </span>
-                )}
-                
-                <div className={`text-xs font-bold text-gray-400 ${!record.status && 'mt-1'}`}>
-                  {activeTab === 'debt' ? 'Amount Paid: ' : 'Price: '} 
-                  <span className={`${activeTab === 'debt' ? 'text-green-600' : 'text-blue-600'} text-lg ml-1`}>
-                    ₹{record.amount}
-                  </span>
+              <div className="flex flex-col items-start md:items-end gap-2 w-full md:w-auto">
+                <div className="text-[15px] font-medium text-gray-700">
+                  {activeTab === 'order' ? 'Total:' : 'Amount Paid:'} <span className={`font-bold ${activeTab === 'debt' ? 'text-green-600' : 'text-blue-600'}`}>₹{record.amount}</span>
+                </div>
+
+                <div className="flex items-center gap-3 text-sm text-gray-500 mt-1 font-medium bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg">
+                  <span className="flex items-center"><Calendar className="w-4 h-4 mr-1.5 text-gray-400" /> {record.date}</span>
+                  <span className="text-gray-300">•</span>
+                  <span className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-gray-400" /> {record.time}</span>
                 </div>
               </div>
-
             </div>
           ))
         )}
       </div>
+
+      {(filterOpen || sortOpen) && (
+        <div onClick={() => { setFilterOpen(false); setSortOpen(false); }} className="fixed inset-0 z-40" />
+      )}
     </div>
   );
 }

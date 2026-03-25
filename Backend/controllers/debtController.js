@@ -14,11 +14,11 @@ exports.getActiveDebts = async (req, res) => {
     // OR the Canteen ID (your logic) so nothing gets missed!
     const activeDebts = await Debt.find({ 
       $or: [
-        { canteen: req.user.id }, 
+        { canteen: req.user.id },
         { canteen: myCanteen ? myCanteen._id : null }
       ],
-      amountOwed: { $gt: 0 } 
-    }).populate('student', 'name rollNo phone email limit'); 
+      amountOwed: { $gt: 0 }
+    }).populate('student', 'name rollNo phoneNo email limit');
 
     res.status(200).json({
       status: 'success',
@@ -108,31 +108,59 @@ exports.notifyStudent = async (req, res) => {
       : "our canteen";
 
     // 5. Draft the email
-    const emailMessage = `
-      Hello ${debt.student.name},
+    // const emailMessage = `
+    //   Hello ${debt.student.name},
       
-      This is a friendly reminder from ${canteenName} regarding your Credit Snap account. 
-      Your current pending total at our shop is ₹${debt.amountOwed}.
+    //   This is a friendly reminder from ${canteenName} regarding your Credit Snap account.
+    //   Your current pending total at our shop is ₹${debt.amountOwed}.
       
-      Please clear this amount at your earliest convenience.
+    //   Please clear this amount at your earliest convenience.
       
-      Thanks,
-      ${canteenName} & The Credit Snap Team
-    `;
+    //   Thanks,
+    //   ${canteenName} & The Credit Snap Team
+    // `;
+    // 5. Draft the email
+    const emailMessage = `Hello ${debt.student.name},
 
-    // 6. Send the email
-    await sendEmail({
-      email: debt.student.email,
-      subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`, 
-      message: emailMessage
-    });
+This is a friendly reminder from ${canteenName} regarding your Credit Snap account.
+Your current pending total at our shop is ₹${debt.amountOwed}.
 
-    res.status(200).json({
-      status: 'success',
-      message: `Notification sent to ${debt.student.name} from ${canteenName}`
-    });
+Please clear this amount at your earliest convenience.
+
+Thanks,
+${canteenName} & The Credit Snap Team`;
+
+    // 6. Send the email with graceful error handling
+    try {
+      await sendEmail({
+        email: debt.student.email,
+        subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`,
+        message: emailMessage
+      });
+
+      // 📡 Emit real-time bell notification to the student's browser
+      const io = req.app.get('io');
+      if (io && debt.student._id) {
+        io.to(`student:${debt.student._id}`).emit('notify-student', {
+          canteenName,
+          amountOwed: debt.amountOwed
+        });
+      }
+
+      res.status(200).json({
+        status: 'success',
+        message: `Notification sent to ${debt.student.name} from ${canteenName}`
+      });
+    } catch (emailErr) {
+      console.error("❌ Failed to send email:", emailErr);
+      return res.status(500).json({
+        status: 'error',
+        message: `Failed to dispatch email. Cause: ${emailErr.message}`
+      });
+    }
 
   } catch (err) {
+    console.error("❌ Unexpected error in notifyStudent:", err);
     res.status(500).json({ status: 'error', message: err.message });
   }
 };
@@ -151,5 +179,62 @@ exports.getMyDebts = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+// 🔧 4. UPDATE CUSTOM DEBT LIMIT LOGIC
+exports.updateDebtLimit = async (req, res) => {
+  console.log(`[ROUTE HIT] PATCH /api/debts/:id/limit called with ID: ${req.params.id}`);
+  console.log(`[REQUEST BODY] limit: ${req.body.limit}`);
+  try {
+    const newLimit = Number(req.body.limit);
+
+    if (isNaN(newLimit) || newLimit < 0) {
+      console.log(`[REJECTED] Invalid limit: ${req.body.limit}`);
+      return res.status(400).json({ status: 'fail', message: 'Please provide a valid numeric limit (e.g., 3000).' });
+    }
+
+    console.log(`[DB SEARCH] Searching for Debt ID: ${req.params.id}`);
+    const debt = await Debt.findById(req.params.id);
+
+    if (!debt) {
+      console.log(`[404 ERROR] Debt not found for ID: ${req.params.id}`);
+      return res.status(404).json({ status: 'fail', message: 'Debt record not found!' });
+    }
+
+    // Ensure the owner requesting this actually runs the canteen this debt belongs to
+    const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
+
+    // Allow if debt.canteen matches the real canteen ID OR the owner's own user ID (legacy records)
+    const debtCanteenStr = debt.canteen.toString();
+    const ownerMatches = debtCanteenStr === req.user.id ||
+      (myCanteen && debtCanteenStr === myCanteen._id.toString());
+
+    if (!ownerMatches) {
+       return res.status(403).json({ status: 'fail', message: 'You can only change debt limits for students at your own canteen.' });
+    }
+
+    if (newLimit < debt.amountOwed) {
+       return res.status(400).json({ status: 'fail', message: `Cannot set limit to ₹${newLimit} because this student currently owes ₹${debt.amountOwed}.` });
+    }
+
+    debt.limit = newLimit;
+    await debt.save();
+
+    // 📡 Emit so dashboards live-refresh!
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`student:${debt.student}`).emit('debt-updated');
+      io.to(`canteen:${debt.canteen}`).emit('debt-updated');
+    }
+
+    console.log(`[SUCCESS] Updated limit to ${newLimit} for Debt ID: ${req.params.id}`);
+    res.status(200).json({
+      status: 'success',
+      message: `Custom debt limit successfully updated to ₹${newLimit}`,
+      data: debt
+    });
+  } catch (err) {
+    console.error(`[500 ERROR] Error updating debt limit:`, err);
+    res.status(500).json({ status: 'error', message: err.message });
   }
 };

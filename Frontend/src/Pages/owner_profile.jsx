@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useNotifications } from '../context/NotificationContext';
 
 const buildOwnerInfo = (user, canteen) => ({
   canteenName: canteen?.name || "Not Set",
@@ -8,12 +9,14 @@ const buildOwnerInfo = (user, canteen) => ({
   email: user?.email || "Not Set",
   phone: user?.phoneNo || "Not Set",
   timings: canteen?.timings || "4:00 PM - 4:00 AM",
+  profilePhoto: user?.profilePhoto || null,
   razorpayMerchantKeyId: canteen?.razorpayMerchantKeyId || "",
   razorpayMerchantKeySecret: "",
   razorpayMerchantSecretConfigured: Boolean(canteen?.razorpayMerchantSecretConfigured),
 });
 
 export default function OwnerProfile() {
+  const { showAlert } = useNotifications();
   const navigate = useNavigate();
   
   // 1. Master State
@@ -66,6 +69,7 @@ export default function OwnerProfile() {
         adminName: editForm.adminName,
         phone: editForm.phone,
         timings: editForm.timings,
+        profilePhoto: editForm.profilePhoto ?? "",
       };
 
       if (editForm.razorpayMerchantKeyId?.trim()) {
@@ -91,11 +95,12 @@ export default function OwnerProfile() {
         setOwnerInfo(newInfo);
         setEditForm(newInfo);
         setIsEditing(false);
+        showAlert("Success", "Profile updated successfully!", "success");
       } else {
-        alert(data.message || 'Error updating profile');
+        showAlert("Error", data.message || 'Error updating profile', "error");
       }
     } catch {
-      alert('Network Error: Could not connect to backend.');
+      showAlert("Network Error", "Could not connect to backend.", "error");
     }
   };
 
@@ -103,16 +108,55 @@ export default function OwnerProfile() {
     setEditForm({ ...editForm, [e.target.name]: e.target.value });
   };
 
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 500 * 1024) {
+      showAlert("Image Too Large", "Please upload a profile picture smaller than 500KB.", "warning");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setEditForm({ ...editForm, profilePhoto: reader.result });
+      setIsEditing(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = (e) => {
+    e.preventDefault();
+    setEditForm({ ...editForm, profilePhoto: "" });
+    setIsEditing(true);
+  };
+
+  const displayPhoto = isEditing ? editForm.profilePhoto : ownerInfo.profilePhoto;
+
   return (
     <div className="flex-1 h-full min-h-screen flex items-start justify-center pt-24 bg-white">
       
       {/* The Gray Card */}
       <div className="relative bg-[#e5e5e5] rounded-[32px] border border-gray-400 shadow-sm w-full max-w-2xl px-12 pt-20 pb-12">
         
-        {/* The Overlapping Avatar Cutout */}
         <div className="absolute -top-16 left-1/2 transform -translate-x-1/2">
-          <div className="bg-[#0f172a] rounded-full flex items-center justify-center w-32 h-32 border-[8px] border-white">
-            <User className="w-16 h-16 text-white" strokeWidth={2} />
+          <div className="relative bg-[#0f172a] rounded-full flex items-center justify-center w-32 h-32 border-[8px] border-white overflow-hidden group transition-all">
+            {displayPhoto ? (
+              <img src={displayPhoto} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-16 h-16 text-white" strokeWidth={2} />
+            )}
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+              <label className="cursor-pointer hover:opacity-80 transition-opacity">
+                <span className="text-white text-[11px] font-semibold tracking-wider uppercase">Change</span>
+                <input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" onChange={handlePhotoUpload} />
+              </label>
+              {displayPhoto && (
+                <button onClick={handleRemovePhoto} className="cursor-pointer text-red-400 hover:text-red-300 transition-colors text-[11px] font-semibold tracking-wider uppercase mt-1">
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -212,7 +256,7 @@ export default function OwnerProfile() {
           // VIEW MODE
           <>
             <div className="mt-14 flex justify-between gap-4 px-6">
-              <button onClick={() => navigate('/owner/change-password')} className="cursor-pointer bg-[#262626] text-white px-8 py-3 rounded-full font-medium hover:bg-black transition shadow-sm w-1/2">
+              <button onClick={() => navigate('/owner/change-password')} className="cursor-pointer bg-[#0f172a] text-white px-8 py-3 rounded-full font-medium hover:bg-slate-900 transition shadow-sm w-1/2">
                 Change Password
               </button>
               <button onClick={handleEditClick} className="cursor-pointer bg-[#0f172a] text-white px-8 py-3 rounded-full font-medium hover:bg-slate-900 transition shadow-sm w-1/2">
@@ -220,7 +264,15 @@ export default function OwnerProfile() {
               </button>
             </div>
             <div className="mt-6 flex justify-center">
-              <button onClick={() => navigate('/')} className="cursor-pointer bg-[#C28813] text-white px-14 py-3 rounded-full font-medium text-lg hover:bg-black transition shadow-sm">
+              <button onClick={() => {
+                sessionStorage.removeItem('token');
+                sessionStorage.removeItem('user');
+                sessionStorage.removeItem('canteenId');
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('canteenId');
+                navigate('/');
+              }} className="cursor-pointer bg-[#C28813] text-white px-14 py-3 rounded-full font-medium text-lg hover:bg-black transition shadow-sm">
                 Log Out
              </button>
             </div>
@@ -231,7 +283,7 @@ export default function OwnerProfile() {
             <button onClick={handleCancelClick} className="cursor-pointer bg-gray-500 text-white px-8 py-3 rounded-full font-medium hover:bg-gray-600 transition shadow-sm w-1/2">
               Cancel
             </button>
-            <button onClick={handleSaveClick} className="cursor-pointer bg-[#16a34a] text-white px-8 py-3 rounded-full font-medium hover:bg-green-700 transition shadow-sm w-1/2">
+            <button onClick={handleSaveClick} className="cursor-pointer bg-[#0f172a] text-white px-8 py-3 rounded-full font-medium hover:bg-slate-900 transition shadow-sm w-1/2">
               Save Changes
             </button>
           </div>

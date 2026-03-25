@@ -22,6 +22,10 @@ const canteenSchema = new mongoose.Schema({
     trim: true,
     default: '4:00 PM - 4:00 AM'
   },
+  defaultLimit: {
+    type: Number,
+    default: 3000
+  },
   razorpayMerchantKeyId: {
     type: String,
     trim: true,
