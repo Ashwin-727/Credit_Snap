@@ -306,20 +306,35 @@ exports.clearOrders = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Please provide an array of order IDs to clear.' });
     }
 
-    // Verify canteen ownership to prevent unauthorized clears
-    const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
+    const ownerId = req.user._id || req.user.id;
+    const myCanteen = await Canteen.findOne({ ownerId });
     if (!myCanteen) {
       return res.status(403).json({ status: 'fail', message: 'You are not authorized to clear these orders.' });
     }
 
-    await Order.updateMany(
-      { _id: { $in: orderIds }, canteen: myCanteen._id }, 
+    const clearResult = await Order.updateMany(
+      {
+        _id: { $in: orderIds },
+        canteen: { $in: [myCanteen._id, ownerId] },
+        status: { $ne: 'pending' }
+      },
       { isCleared: true }
     );
 
+    if (!clearResult.matchedCount) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No processed orders were found to clear for this canteen.'
+      });
+    }
+
     res.status(200).json({
       status: 'success',
-      message: 'Successfully cleared orders from dashboard.'
+      message: 'Successfully cleared orders from dashboard.',
+      data: {
+        matchedCount: clearResult.matchedCount,
+        modifiedCount: clearResult.modifiedCount
+      }
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

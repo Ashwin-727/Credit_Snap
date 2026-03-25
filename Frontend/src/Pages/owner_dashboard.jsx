@@ -5,6 +5,11 @@ import { useNotifications } from '../context/NotificationContext';
 
 export default function OwnerDashboard() {
   const { showAlert } = useNotifications();
+  const getAuthToken = () => sessionStorage.getItem('token') || localStorage.getItem('token');
+  const isDebtPaymentReceipt = (order) => {
+    const firstItemName = order?.items?.[0]?.name;
+    return firstItemName === 'Offline Debt Payment' || firstItemName === 'Online Debt Payment';
+  };
   // ==========================================
   // 1. CANTEEN DATABASE STATE (Integrated)
   // ==========================================
@@ -22,7 +27,7 @@ export default function OwnerDashboard() {
   // ==========================================
   const fetchMyCanteen = async () => {
     try {
-      const token = sessionStorage.getItem('token'); 
+      const token = getAuthToken();
       const res = await axios.get('http://localhost:5000/api/canteens/my', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -36,14 +41,14 @@ export default function OwnerDashboard() {
 
   const fetchOrders = async () => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = getAuthToken();
       const response = await axios.get('http://localhost:5000/api/orders/my-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data.status === 'success') {
         const actualOrders = response.data.data.filter(
-          order => !order.isCleared && !(order.items && order.items.length > 0 && order.items[0].name === 'Offline Debt Payment')
+          (order) => !order.isCleared && !isDebtPaymentReceipt(order)
         );
         setOrders(actualOrders);
       }
@@ -94,7 +99,7 @@ export default function OwnerDashboard() {
     }
     try {
       const newStatus = !isCanteenOpen;
-      const token = sessionStorage.getItem('token');
+      const token = getAuthToken();
       await axios.put(`http://localhost:5000/api/canteens/${canteen._id}/status`, 
         { isOpen: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -107,7 +112,7 @@ export default function OwnerDashboard() {
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = getAuthToken();
       const response = await axios.patch('http://localhost:5000/api/orders/update-status', 
         { orderId, status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -122,12 +127,12 @@ export default function OwnerDashboard() {
 
   const removeOrder = async (orderId) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = getAuthToken();
       await axios.patch('http://localhost:5000/api/orders/clear', 
         { orderIds: [orderId] },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setOrders(orders.filter(order => order._id !== orderId));
+      await fetchOrders();
     } catch (err) {
       showAlert("Error", err.response?.data?.message || "Failed to clear order.", "error");
     }
@@ -138,12 +143,12 @@ export default function OwnerDashboard() {
     if (idsToClear.length === 0) return;
     
     try {
-      const token = sessionStorage.getItem('token');
+      const token = getAuthToken();
       await axios.patch('http://localhost:5000/api/orders/clear', 
         { orderIds: idsToClear },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setOrders(orders.filter(order => order.status === 'pending'));
+      await fetchOrders();
     } catch (err) {
       showAlert("Error", err.response?.data?.message || "Failed to clear orders.", "error");
     }
