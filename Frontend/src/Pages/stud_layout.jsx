@@ -67,9 +67,14 @@ export default function StudLayout() {
       } catch {}
     });
 
-    // Owner sent a manual notification email (bell button)
+    // Owner sent a manual notification email
     socket.on('notify-student', ({ canteenName, amountOwed }) => {
       addNotification('info', 'Payment Reminder 💬', `${canteenName} reminds you to clear your ₹${amountOwed} pending debt.`);
+    });
+
+    // 🌟 NEW: Listen for successful payment event
+    socket.on('payment-successful', ({ amount, canteenName }) => {
+      addNotification('success', 'Payment Received! 💳', `Payment of ₹${amount} successfully processed to ${canteenName}.`);
     });
 
     return () => socket.disconnect();
@@ -115,7 +120,6 @@ export default function StudLayout() {
     fetchProfile();
   }, [location.pathname]);
   
-  // --- NEW: Sidebar Toggle State ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const notificationRef = useRef(null);
@@ -134,16 +138,17 @@ export default function StudLayout() {
   const toggleProfile = () => { setIsProfileOpen(!isProfileOpen); setIsNotificationsOpen(false); };
   const isActive = (path) => location.pathname.includes(path);
 
-  // 🌟 NEW: Handle Notification Clicks
+  // 🌟 NEW: Smart Notification Routing
   const handleNotificationClick = (notif) => {
-    // 1. Mark as read
+    // 1. Mark as read and close dropdown
     setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
-    
-    // 2. Close the dropdown
     setIsNotificationsOpen(false);
     
-    // 3. Navigate based on the title keywords
-    if (notif.title.includes('Debt') || notif.title.includes('Payment')) {
+    // 2. Route based on notification type
+    if (notif.title.includes('Payment Received')) {
+      // Routes to History page AND tells it to open the 'debt' tab
+      navigate('/student/history', { state: { targetTab: 'debt' } });
+    } else if (notif.title.includes('Debt') || notif.title.includes('Payment Reminder')) {
       navigate('/student/debts');
     } else if (notif.title.includes('Order')) {
       navigate('/student/dashboard');
@@ -228,7 +233,6 @@ export default function StudLayout() {
               )}
               {isNotificationsOpen && (
                 <div className="absolute right-0 mt-4 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
-                  {/* Header */}
                   <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <div className="flex items-center gap-2">
                       <Bell className="w-4 h-4 text-gray-600" />
@@ -244,7 +248,6 @@ export default function StudLayout() {
                       )}
                     </div>
                   </div>
-                  {/* Notification List */}
                   <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-50">
                     {notifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12 text-center">
