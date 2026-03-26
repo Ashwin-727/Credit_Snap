@@ -7,6 +7,7 @@ const userRoutes = require('./routes/userRoutes');
 const ordersRouter = require('./routes/ordersRoute');
 const debtRoutes = require('./routes/debtRoutes'); // ⭐ NEW: Import your Debt Routes
 const analyticsRoutes = require('./routes/analyticsRoutes'); // ⭐ NEW: Import Analytics Routes
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/users', userRoutes);       // Your friend's work
 app.use('/api/orders', ordersRouter);
 app.use('/api/debts', debtRoutes);       // ⭐ NEW: Hook up the Debt API!
 app.use('/api/analytics', analyticsRoutes); // ⭐ NEW: Hook up the Analytics API!
+app.use('/api/payments', paymentRoutes);
 
 // 3. A simple test route!
 app.get('/', (req, res) => {

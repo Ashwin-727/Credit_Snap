@@ -1,8 +1,8 @@
 const Debt = require('../models/debtModel');
-const Order = require('../models/ordersModel'); // 👈 ADD THIS LINE
 const sendEmail = require('../utils/sendEmail');
 
 const Canteen = require('../models/canteenModel'); // 👈 Make sure Canteen is imported!
+const { settleDebtPayment } = require('../utils/debtPayments');
 
 // Get all active debts for the logged-in owner's canteen
 exports.getActiveDebts = async (req, res) => {
@@ -14,11 +14,11 @@ exports.getActiveDebts = async (req, res) => {
     // OR the Canteen ID (your logic) so nothing gets missed!
     const activeDebts = await Debt.find({ 
       $or: [
-        { canteen: req.user.id }, 
+        { canteen: req.user.id },
         { canteen: myCanteen ? myCanteen._id : null }
       ],
-      amountOwed: { $gt: 0 } 
-    }).populate('student', 'name rollNo phoneNo email limit'); 
+      amountOwed: { $gt: 0 }
+    }).populate('student', 'name rollNo phoneNo email limit');
 
     res.status(200).json({
       status: 'success',
@@ -48,28 +48,13 @@ exports.payOffline = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: `Amount exceeds current debt! The maximum deduction is ₹${debt.amountOwed}.` });
     }
 
-    // 1️⃣ Update the specific Canteen Debt Ticket
-    debt.amountOwed = debt.amountOwed - amountPaid;
-    await debt.save();
-
-    // 2️⃣ Update the Student's overall totalDebt in the Users collection
-    const student = debt.student; 
-    student.totalDebt = student.totalDebt - amountPaid;
-    if (student.totalDebt < 0) student.totalDebt = 0; 
-    await student.save();
-
-    // 3️⃣ NEW: Create a "Receipt" in the Orders collection for the History page!
-    await Order.create({
-      student: student._id,
-      canteen: debt.canteen,
-      items: [{
-        name: 'Offline Debt Payment', // Identifies this as a payment, not food!
-        quantity: 1,
-        price: amountPaid
-      }],
-      totalAmount: amountPaid,
-      status: 'accepted' // Automatically accepted so it gets the green tag in the UI
+    const settlement = await settleDebtPayment({
+      debt,
+      amountPaid,
+      receiptLabel: 'Offline Debt Payment'
     });
+
+    const student = debt.student;
 
     // 4️⃣ EMIT TO SOCKET.IO ROOMS SO IT UPDATES LIVE
     const io = req.app.get('io');
@@ -85,10 +70,7 @@ exports.payOffline = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: `Successfully deducted ₹${amountPaid} and recorded the transaction in History.`,
-      data: { 
-        canteenDebt: debt.amountOwed,
-        studentTotalDebt: student.totalDebt
-      }
+      data: settlement
     });
 
   } catch (err) {
@@ -129,7 +111,7 @@ exports.notifyStudent = async (req, res) => {
     // const emailMessage = `
     //   Hello ${debt.student.name},
       
-    //   This is a friendly reminder from ${canteenName} regarding your Credit Snap account. 
+    //   This is a friendly reminder from ${canteenName} regarding your Credit Snap account.
     //   Your current pending total at our shop is ₹${debt.amountOwed}.
       
     //   Please clear this amount at your earliest convenience.
@@ -140,7 +122,7 @@ exports.notifyStudent = async (req, res) => {
     // 5. Draft the email
     const emailMessage = `Hello ${debt.student.name},
 
-This is a friendly reminder from ${canteenName} regarding your Credit Snap account. 
+This is a friendly reminder from ${canteenName} regarding your Credit Snap account.
 Your current pending total at our shop is ₹${debt.amountOwed}.
 
 Please clear this amount at your earliest convenience.
@@ -152,7 +134,7 @@ ${canteenName} & The Credit Snap Team`;
     try {
       await sendEmail({
         email: debt.student.email,
-        subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`, 
+        subject: `Credit Snap: Pending Debt Reminder from ${canteenName}`,
         message: emailMessage
       });
 
@@ -171,9 +153,9 @@ ${canteenName} & The Credit Snap Team`;
       });
     } catch (emailErr) {
       console.error("❌ Failed to send email:", emailErr);
-      return res.status(500).json({ 
-        status: 'error', 
-        message: `Failed to dispatch email. Cause: ${emailErr.message}` 
+      return res.status(500).json({
+        status: 'error',
+        message: `Failed to dispatch email. Cause: ${emailErr.message}`
       });
     }
 
@@ -199,7 +181,6 @@ exports.getMyDebts = async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 };
-
 // 🔧 4. UPDATE CUSTOM DEBT LIMIT LOGIC
 exports.updateDebtLimit = async (req, res) => {
   console.log(`[ROUTE HIT] PATCH /api/debts/:id/limit called with ID: ${req.params.id}`);
@@ -214,7 +195,7 @@ exports.updateDebtLimit = async (req, res) => {
 
     console.log(`[DB SEARCH] Searching for Debt ID: ${req.params.id}`);
     const debt = await Debt.findById(req.params.id);
-    
+
     if (!debt) {
       console.log(`[404 ERROR] Debt not found for ID: ${req.params.id}`);
       return res.status(404).json({ status: 'fail', message: 'Debt record not found!' });
@@ -222,7 +203,7 @@ exports.updateDebtLimit = async (req, res) => {
 
     // Ensure the owner requesting this actually runs the canteen this debt belongs to
     const myCanteen = await Canteen.findOne({ ownerId: req.user.id });
-    
+
     // Allow if debt.canteen matches the real canteen ID OR the owner's own user ID (legacy records)
     const debtCanteenStr = debt.canteen.toString();
     const ownerMatches = debtCanteenStr === req.user.id ||

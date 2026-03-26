@@ -3,19 +3,24 @@ import { User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
 
+const buildOwnerInfo = (user, canteen) => ({
+  canteenName: canteen?.name || "Not Set",
+  adminName: user?.name || "Not Set",
+  email: user?.email || "Not Set",
+  phone: user?.phoneNo || "Not Set",
+  timings: canteen?.timings || "4:00 PM - 4:00 AM",
+  profilePhoto: user?.profilePhoto || null,
+  razorpayMerchantKeyId: canteen?.razorpayMerchantKeyId || "",
+  razorpayMerchantKeySecret: "",
+  razorpayMerchantSecretConfigured: Boolean(canteen?.razorpayMerchantSecretConfigured),
+});
+
 export default function OwnerProfile() {
   const { showAlert } = useNotifications();
   const navigate = useNavigate();
   
   // 1. Master State
-  const [ownerInfo, setOwnerInfo] = useState({
-    canteenName: "Loading...",
-    adminName: "Loading...",
-    email: "Loading...",
-    phone: "Loading...",
-    timings: "Loading...",
-    profilePhoto: null
-  });
+  const [ownerInfo, setOwnerInfo] = useState(buildOwnerInfo(null, null));
 
   // 2. Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
@@ -34,18 +39,7 @@ export default function OwnerProfile() {
         const data = await response.json();
         
         if (data.status === 'success') {
-          const user = data.data.user;
-          const canteen = data.data.canteen;
-          
-          const newInfo = {
-            canteenName: canteen?.name || "Not Set",
-            adminName: user.name || "Not Set",
-            email: user.email || "Not Set",
-            phone: user.phoneNo || "Not Set",
-            timings: canteen?.timings || "4:00 PM - 4:00 AM",
-            profilePhoto: user.profilePhoto || null
-          };
-          
+          const newInfo = buildOwnerInfo(data.data.user, data.data.canteen);
           setOwnerInfo(newInfo);
           setEditForm(newInfo);
         }
@@ -70,24 +64,42 @@ export default function OwnerProfile() {
   const handleSaveClick = async () => {
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const payload = {
+        canteenName: editForm.canteenName,
+        adminName: editForm.adminName,
+        phone: editForm.phone,
+        timings: editForm.timings,
+        profilePhoto: editForm.profilePhoto ?? "",
+      };
+
+      if (editForm.razorpayMerchantKeyId?.trim()) {
+        payload.razorpayMerchantKeyId = editForm.razorpayMerchantKeyId.trim();
+      }
+
+      if (editForm.razorpayMerchantKeySecret?.trim()) {
+        payload.razorpayMerchantKeySecret = editForm.razorpayMerchantKeySecret.trim();
+      }
+
       const response = await fetch('http://localhost:5000/api/users/update-my-profile', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       
       if (data.status === 'success') {
-        setOwnerInfo(editForm); // save the new data locally to reflect changes
+        const newInfo = buildOwnerInfo(data.data.user, data.data.canteen);
+        setOwnerInfo(newInfo);
+        setEditForm(newInfo);
         setIsEditing(false);
         showAlert("Success", "Profile updated successfully!", "success");
       } else {
         showAlert("Error", data.message || 'Error updating profile', "error");
       }
-    } catch (err) {
+    } catch {
       showAlert("Network Error", "Could not connect to backend.", "error");
     }
   };
@@ -134,7 +146,6 @@ export default function OwnerProfile() {
             ) : (
               <User className="w-16 h-16 text-white" strokeWidth={2} />
             )}
-            
             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
               <label className="cursor-pointer hover:opacity-80 transition-opacity">
                 <span className="text-white text-[11px] font-semibold tracking-wider uppercase">Change</span>
@@ -191,6 +202,52 @@ export default function OwnerProfile() {
             ) : (
               <span>{ownerInfo.timings}</span>
             )}
+          </div>
+
+          <div className="flex items-start">
+            <span className="w-48 font-medium shrink-0 pt-1">Razorpay Key ID :</span>
+            <div className="w-full max-w-sm">
+              {isEditing ? (
+                <>
+                  <input
+                    type="text"
+                    name="razorpayMerchantKeyId"
+                    value={editForm.razorpayMerchantKeyId}
+                    onChange={handleChange}
+                    placeholder="rzp_test_xxxxx"
+                    className="bg-white border border-gray-300 rounded-lg px-3 py-1 w-full outline-none focus:border-[#0f172a] shadow-sm transition"
+                  />
+                  <p className="text-xs text-gray-600 mt-2 leading-5">
+                    Use the Razorpay API key ID from this canteen&apos;s own merchant account. Payments will go directly to this canteen.
+                  </p>
+                  <input
+                    type="password"
+                    name="razorpayMerchantKeySecret"
+                    value={editForm.razorpayMerchantKeySecret}
+                    onChange={handleChange}
+                    placeholder={ownerInfo.razorpayMerchantSecretConfigured ? 'Leave blank to keep existing secret' : 'Enter Razorpay key secret'}
+                    className="bg-white border border-gray-300 rounded-lg px-3 py-1 w-full outline-none focus:border-[#0f172a] shadow-sm transition mt-4"
+                  />
+                  <p className="text-xs text-gray-600 mt-2 leading-5">
+                    The key secret is stored securely on the backend and is never shown again after saving.
+                  </p>
+                </>
+              ) : ownerInfo.razorpayMerchantKeyId ? (
+                <div>
+                  <span>{ownerInfo.razorpayMerchantKeyId}</span>
+                  <p className="text-xs text-green-700 mt-2 font-medium">
+                    {ownerInfo.razorpayMerchantSecretConfigured
+                      ? 'Direct Razorpay payments are connected for this canteen.'
+                      : 'Key ID saved, but the secret still needs to be added.'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-gray-500">Not connected</span>
+                  <p className="text-xs text-amber-700 mt-2 font-medium">Students cannot pay debts online until this canteen adds its Razorpay merchant keys.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

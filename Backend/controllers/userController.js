@@ -4,6 +4,18 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sendEmail = require('../utils/email');
 
+const serializeOwnerCanteen = (canteen) => {
+  if (!canteen) {
+    return null;
+  }
+
+  const serialized = canteen.toObject ? canteen.toObject() : { ...canteen };
+  serialized.razorpayMerchantSecretConfigured = Boolean(canteen.razorpayMerchantKeySecretEncrypted);
+  delete serialized.razorpayMerchantKeySecretEncrypted;
+
+  return serialized;
+};
+
 // 🛠️ HELPER FUNCTION: Generates the Token
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -282,14 +294,15 @@ exports.getMyProfile = async (req, res) => {
     let canteen = null;
 
     if (user.role === 'owner') {
-      canteen = await Canteen.findOne({ ownerId: user._id });
+      canteen = await Canteen.findOne({ ownerId: user._id })
+        .select('+razorpayMerchantKeySecretEncrypted');
     }
 
     res.status(200).json({
       status: 'success',
       data: {
         user,
-        canteen
+        canteen: serializeOwnerCanteen(canteen)
       }
     });
   } catch (error) {
@@ -316,10 +329,18 @@ exports.updateMyProfile = async (req, res) => {
     // Update Canteen record for Owners
     let canteen = null;
     if (user.role === 'owner') {
-      canteen = await Canteen.findOne({ ownerId: user._id });
+      canteen = await Canteen.findOne({ ownerId: user._id })
+        .select('+razorpayMerchantKeySecretEncrypted');
       if (canteen) {
         if (req.body.canteenName) canteen.name = req.body.canteenName;
         if (req.body.timings) canteen.timings = req.body.timings;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'razorpayMerchantKeyId')) {
+          const keyId = (req.body.razorpayMerchantKeyId || '').trim();
+          canteen.razorpayMerchantKeyId = keyId || canteen.razorpayMerchantKeyId;
+        }
+        if (Object.prototype.hasOwnProperty.call(req.body, 'razorpayMerchantKeySecret')) {
+          canteen.setRazorpayMerchantKeySecret(req.body.razorpayMerchantKeySecret);
+        }
         await canteen.save();
       }
     }
@@ -327,7 +348,7 @@ exports.updateMyProfile = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Profile updated successfully!',
-      data: { user, canteen }
+      data: { user, canteen: serializeOwnerCanteen(canteen) }
     });
   } catch (error) {
     res.status(400).json({ status: 'fail', message: error.message });
