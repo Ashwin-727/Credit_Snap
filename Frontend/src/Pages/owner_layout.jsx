@@ -12,6 +12,7 @@ export default function OwnerLayout() {
   const [notifications, setNotifications] = useState([]);
   const [paymentToast, setPaymentToast] = useState(null); // { studentName, amount }
   const paymentToastTimer = useRef(null);
+  const recentNotificationKeysRef = useRef(new Map());
 
   const showPaymentToast = useCallback((studentName, amount) => {
     if (paymentToastTimer.current) clearTimeout(paymentToastTimer.current);
@@ -31,9 +32,28 @@ export default function OwnerLayout() {
     }, ...prev].slice(0, 20));
   }, []);
 
+  const shouldSkipDuplicateNotification = useCallback((key, ttlMs = 5000) => {
+    const now = Date.now();
+    const recentNotificationKeys = recentNotificationKeysRef.current;
+
+    for (const [storedKey, timestamp] of recentNotificationKeys.entries()) {
+      if (now - timestamp > ttlMs) {
+        recentNotificationKeys.delete(storedKey);
+      }
+    }
+
+    if (recentNotificationKeys.has(key)) {
+      return true;
+    }
+
+    recentNotificationKeys.set(key, now);
+    return false;
+  }, []);
+
   // Socket.IO: Live owner notifications
   useEffect(() => {
     let socket;
+    let isCancelled = false;
 
     const fetchProfileAndJoinSocket = async () => {
       try {
@@ -44,6 +64,8 @@ export default function OwnerLayout() {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
+
+        if (isCancelled) return;
         
         if (data.status === 'success') {
           const user = data.data.user;
@@ -73,6 +95,7 @@ export default function OwnerLayout() {
                 firstItemName === 'Offline Debt Payment' ||
                 firstItemName === 'Online Debt Payment';
               if (isDebtPayment) return;
+              if (order?._id && shouldSkipDuplicateNotification(`new-order:${order._id}`)) return;
 
               const studentName = order.student?.name || 'A student';
               const items = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'an order';
@@ -105,9 +128,10 @@ export default function OwnerLayout() {
     fetchProfileAndJoinSocket();
 
     return () => {
+      isCancelled = true;
       if (socket) socket.disconnect();
     };
-  }, [location.pathname, addNotification, showPaymentToast]);
+  }, [location.pathname, addNotification, showPaymentToast, shouldSkipDuplicateNotification]);
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
