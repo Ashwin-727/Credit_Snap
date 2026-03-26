@@ -219,6 +219,29 @@ export default function ActiveDebtsContent() {
   if (sortBy === "debt_low")  list = [...list].sort((a, b) => a.debt - b.debt);
   if (sortBy === "name")      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
 
+  const hasAnyActiveDebts = students.some((student) => student.debt > 0);
+  const hasFiltersApplied = Boolean(search || filterBy !== "all");
+
+  let emptyStateTitle = "All debts cleared!";
+  let emptyStateMessage = "There are no active debts matching your criteria right now.";
+  let emptyStateIcon = <CheckCircle className="w-12 h-12 text-green-500 mb-2" />;
+
+  if (hasAnyActiveDebts) {
+    emptyStateTitle = filterBy === "critical"
+      ? "No critical debts"
+      : filterBy === "safe"
+        ? "No safe debts"
+        : "No matching debts found";
+    emptyStateMessage = filterBy === "critical"
+      ? "No students are currently at or above 80% of their debt limit."
+      : filterBy === "safe"
+        ? "No students are currently below 80% of their debt limit."
+        : "Try adjusting your search or filter criteria.";
+    emptyStateIcon = <AlertTriangle className="w-12 h-12 text-orange-400 mb-2" />;
+  } else if (!hasFiltersApplied) {
+    emptyStateMessage = "There are no active debts right now.";
+  }
+
   const getFilterText = () => {
     if (filterBy === 'critical') return "Critical (≥80%)";
     if (filterBy === 'safe') return "Safe (<80%)";
@@ -415,9 +438,9 @@ export default function ActiveDebtsContent() {
           
           {list.length === 0 && (
             <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center gap-3">
-              <CheckCircle className="w-12 h-12 text-green-500 mb-2" />
-              <p className="text-2xl font-semibold text-gray-800">All debts cleared!</p>
-              <p className="text-gray-500">There are no active debts matching your criteria right now.</p>
+              {emptyStateIcon}
+              <p className="text-2xl font-semibold text-gray-800">{emptyStateTitle}</p>
+              <p className="text-gray-500">{emptyStateMessage}</p>
               {search || filterBy !== 'all' ? (
                 <button onClick={() => { setSearch(''); setFilterBy('all'); setSortBy('default'); }} className="cursor-pointer mt-4 bg-[#eab308] hover:bg-yellow-500 text-[#1e293b] font-semibold px-6 py-2.5 rounded-lg transition text-sm">Clear Filters</button>
               ) : null}
