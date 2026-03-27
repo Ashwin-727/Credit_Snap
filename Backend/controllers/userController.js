@@ -31,6 +31,33 @@ const signToken = (id) => {
   });
 };
 
+const trimTrailingSlash = (value = '') => value.replace(/\/+$/, '');
+
+const getFrontendBaseUrl = (req) => {
+  const configuredUrl = trimTrailingSlash(process.env.FRONTEND_URL || '');
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const originHeader = trimTrailingSlash(req.get('origin') || '');
+  if (originHeader) {
+    return originHeader;
+  }
+
+  const forwardedProto = req.get('x-forwarded-proto');
+  const forwardedHost = trimTrailingSlash(req.get('x-forwarded-host') || '');
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const host = trimTrailingSlash(req.get('host') || '');
+  if (host) {
+    return `${req.protocol}://${host}`;
+  }
+
+  return 'http://localhost:5173';
+};
+
 // ==========================================
 // AUTHENTICATION CONTROLLERS
 // ==========================================
@@ -103,7 +130,7 @@ exports.signup = async (req, res) => {
         isOpen: false
       });
 
-      const loginURL = `http://localhost:5173/`;
+      const loginURL = `${getFrontendBaseUrl(req)}/`;
       const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
           <h2 style="color: #eab308;">Welcome to Credit Snap!</h2>
@@ -147,7 +174,7 @@ exports.signup = async (req, res) => {
     }
 
     // 4. STUDENT LOGIC: Send verification email
-    const verifyURL = `http://localhost:5173/verify-email/${verificationToken}`;
+    const verifyURL = `${getFrontendBaseUrl(req)}/verify-email/${verificationToken}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #f97316;">Welcome to Credit Snap!</h2>
@@ -376,7 +403,7 @@ exports.forgotPassword = async (req, res) => {
     const resetToken = user.createPasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    const resetURL = `http://localhost:5173/reset-password/${resetToken}?role=${user.role}`;
+    const resetURL = `${getFrontendBaseUrl(req)}/reset-password/${resetToken}?role=${user.role}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #f97316;">Password Reset</h2>
