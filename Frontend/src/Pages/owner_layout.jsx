@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Home, Edit, Wallet, BarChart2, History, HelpCircle, Bell, UserCircle, Settings, LogOut, ShoppingBag, CheckCircle, AlertTriangle, IndianRupee, X, IndianRupee as RupeeIcon } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function OwnerLayout() {
   const [notifications, setNotifications] = useState([]);
   const [paymentToast, setPaymentToast] = useState(null); // { studentName, amount }
   const paymentToastTimer = useRef(null);
+  const recentNotificationKeysRef = useRef(new Map());
 
   const showPaymentToast = useCallback((studentName, amount) => {
     if (paymentToastTimer.current) clearTimeout(paymentToastTimer.current);
@@ -33,19 +35,40 @@ export default function OwnerLayout() {
   }, []);
 
   // Initialize and synchronize websocket connections to dispatch background events dynamically
+  const shouldSkipDuplicateNotification = useCallback((key, ttlMs = 5000) => {
+    const now = Date.now();
+    const recentNotificationKeys = recentNotificationKeysRef.current;
+
+    for (const [storedKey, timestamp] of recentNotificationKeys.entries()) {
+      if (now - timestamp > ttlMs) {
+        recentNotificationKeys.delete(storedKey);
+      }
+    }
+
+    if (recentNotificationKeys.has(key)) {
+      return true;
+    }
+
+    recentNotificationKeys.set(key, now);
+    return false;
+  }, []);
+
   // Socket.IO: Live owner notifications
   useEffect(() => {
     let socket;
+    let isCancelled = false;
 
     const fetchProfileAndJoinSocket = async () => {
       try {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch('http://localhost:5000/api/users/my-profile', {
+        const response = await fetch(`${BASE_URL}/api/users/my-profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
+
+        if (isCancelled) return;
         
         if (data.status === 'success') {
           const user = data.data.user;
@@ -66,7 +89,7 @@ export default function OwnerLayout() {
           // Join socket room using the canteenId from the API (not sessionStorage)
           const canteenId = canteen?._id;
           if (canteenId) {
-            socket = io('http://localhost:5000');
+            socket = io(`${BASE_URL}`);
             socket.on('connect', () => socket.emit('join-canteen', canteenId));
 
             socket.on('newOrder', (order) => {
@@ -75,6 +98,7 @@ export default function OwnerLayout() {
                 firstItemName === 'Offline Debt Payment' ||
                 firstItemName === 'Online Debt Payment';
               if (isDebtPayment) return;
+              if (order?._id && shouldSkipDuplicateNotification(`new-order:${order._id}`)) return;
 
               const studentName = order.student?.name || 'A student';
               const items = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'an order';
@@ -107,9 +131,10 @@ export default function OwnerLayout() {
     fetchProfileAndJoinSocket();
 
     return () => {
+      isCancelled = true;
       if (socket) socket.disconnect();
     };
-  }, [location.pathname, addNotification, showPaymentToast]);
+  }, [location.pathname, addNotification, showPaymentToast, shouldSkipDuplicateNotification]);
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);

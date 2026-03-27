@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
@@ -12,29 +13,29 @@ export default function OwnerDashboard() {
   };
   // Initialize state configurations for tracking canteen status directly from the DB
   // ==========================================
-  // 1. CANTEEN DATABASE STATE (Integrated)
+  // 1.CANTEEN DATABASE STATE (Integrated)
   // ==========================================
   const [canteen, setCanteen] = useState(null);
   const [isCanteenOpen, setIsCanteenOpen] = useState(false);
 
   // ==========================================
-  // 2. ORDERS DATABASE STATE (Friend's code)
+  // 2.ORDERS DATABASE STATE (Friend's code)
   // ==========================================
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Define fetching mechanisms to continuously query the database upon initial mount
   // ==========================================
-  // 3. FETCH DATA ON LOAD
+  // 3.FETCH DATA ON LOAD
   // ==========================================
   const fetchMyCanteen = async () => {
     try {
       const token = getAuthToken();
-      const res = await axios.get('http://localhost:5000/api/canteens/my', {
+      const res = await axios.get(`${BASE_URL}/api/canteens/my`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCanteen(res.data.data.canteen);
-      setIsCanteenOpen(res.data.data.canteen.isOpen); // Sets UI based on MongoDB!
+      setIsCanteenOpen(res.data.data.canteen.isOpen); //Here we set UI based on MongoDB!
       sessionStorage.setItem('canteenId', res.data.data.canteen._id);
     } catch (err) {
       console.error("Failed to load canteen", err);
@@ -44,7 +45,7 @@ export default function OwnerDashboard() {
   const fetchOrders = async () => {
     try {
       const token = getAuthToken();
-      const response = await axios.get('http://localhost:5000/api/orders/my-orders', {
+      const response = await axios.get(`${BASE_URL}/api/orders/my-orders`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -70,12 +71,12 @@ export default function OwnerDashboard() {
 
   // Establish web socket connectivity to receive instant order dispatches live
   // ==========================================
-  // 3.5 REAL-TIME SOCKET.IO CONNECTION
+  //3.5 REAL-TIME SOCKET.IO CONNECTION
   // ==========================================
   useEffect(() => {
     if (!canteen || !canteen._id) return;
 
-    const socket = io('http://localhost:5000');
+    const socket = io(`${BASE_URL}`);
     const canteenIdStr = canteen._id;
 
     socket.on('connect', () => {
@@ -104,7 +105,7 @@ export default function OwnerDashboard() {
   }, [canteen]);
 
   // ==========================================
-  // 4. API ACTIONS
+  //4. API ACTIONS
   // ==========================================
   const toggleStatus = async () => {
     if (!canteen) {
@@ -114,7 +115,7 @@ export default function OwnerDashboard() {
     try {
       const newStatus = !isCanteenOpen;
       const token = getAuthToken();
-      await axios.put(`http://localhost:5000/api/canteens/${canteen._id}/status`, 
+      await axios.put(`${BASE_URL}/api/canteens/${canteen._id}/status`, 
         { isOpen: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -127,7 +128,7 @@ export default function OwnerDashboard() {
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
       const token = getAuthToken();
-      const response = await axios.patch('http://localhost:5000/api/orders/update-status', 
+      const response = await axios.patch(`${BASE_URL}/api/orders/update-status`, 
         { orderId, status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -142,7 +143,7 @@ export default function OwnerDashboard() {
   const removeOrder = async (orderId) => {
     try {
       const token = getAuthToken();
-      await axios.patch('http://localhost:5000/api/orders/clear', 
+      await axios.patch(`${BASE_URL}/api/orders/clear`, 
         { orderIds: [orderId] },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -158,7 +159,7 @@ export default function OwnerDashboard() {
     
     try {
       const token = getAuthToken();
-      await axios.patch('http://localhost:5000/api/orders/clear', 
+      await axios.patch(`${BASE_URL}/api/orders/clear`, 
         { orderIds: idsToClear },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -169,7 +170,7 @@ export default function OwnerDashboard() {
   };
 
   // ==========================================
-  // 6. RENDER UI
+  //6. RENDER UI
   // ==========================================
   return (
     <div className="active-orders-container">
@@ -379,7 +380,7 @@ export default function OwnerDashboard() {
         .close-x:hover { color: #000; }
       `}</style>
 
-      {/* Top Header Row */}
+      {/*Top Header Row*/}
       <div className="page-header">
         <h1 className="page-title">Active Orders</h1>
         <div className="status-container">
@@ -388,7 +389,7 @@ export default function OwnerDashboard() {
             <input 
               type="checkbox" 
               checked={isCanteenOpen} 
-              onChange={toggleStatus} // 🚨 INTEGRATED HERE!
+              onChange={toggleStatus} //INTEGRATED HERE!
             />
             <span className="slider"></span>
           </label>
@@ -421,7 +422,7 @@ export default function OwnerDashboard() {
 
           {orders.map((order) => (
             <div className="order-card" key={order._id}>
-              {/* Show X button only if it's already processed (debt or rejected) */}
+              {/*We shall show X button only if it's already processed (debt or rejected*/}
               {order.status !== 'pending' && (
                 <button className="close-x" onClick={() => removeOrder(order._id)}>✕</button>
               )}
