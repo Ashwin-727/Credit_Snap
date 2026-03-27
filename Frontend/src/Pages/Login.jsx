@@ -4,6 +4,7 @@ import './Login.css';
 import { useNavigate, Link } from 'react-router-dom';
 import studentLogo from '../assets/Student_without_bg_logo.png';
 import canteenLogo from '../assets/Canteen_without_bg_logo.png';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const Login = () => {
   const [role, setRole] = useState('Student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [loginError, setLoginError] = useState('');
 
@@ -96,14 +98,28 @@ const Login = () => {
             <button
               type="button"
               className={`role-btn ${isStudent ? 'active-blue' : ''}`}
-              onClick={() => { setRole('Student'); setEmailError(''); setLoginError(''); }}
+              onClick={() => {
+                setRole('Student');
+                setEmailError('');
+                setLoginError('');
+                setEmail('');
+                setPassword('');
+                setShowPassword(false);
+              }}
             >
               Student
             </button>
             <button
               type="button"
               className={`role-btn ${!isStudent ? 'active-yellow' : ''}`}
-              onClick={() => { setRole('Canteen'); setEmailError(''); setLoginError(''); }}
+              onClick={() => {
+                setRole('Canteen');
+                setEmailError('');
+                setLoginError('');
+                setEmail('');
+                setPassword('');
+                setShowPassword(false);
+              }}
             >
               Canteen
             </button>
@@ -126,14 +142,23 @@ const Login = () => {
 
             {/* --- PASSWORD INPUT --- */}
             <div className="input-group">
-              <input
-                type="password"
-                placeholder="Enter your password"
-                className="custom-input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  className="custom-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={20} color="#777" /> : <Eye size={20} color="#777" />}
+                </button>
+              </div>
               {loginError && <span className="error-text" style={{ color: 'red', marginTop: '5px', display: 'block' }}>{loginError}</span>}
             </div>
 
