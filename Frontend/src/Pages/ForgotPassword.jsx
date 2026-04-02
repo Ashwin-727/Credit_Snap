@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import './ForgotPassword.css';
@@ -13,9 +14,11 @@ const ForgotPassword = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Trigger password reset logic managing payload submission and tracking server response
   const handleReset = async (e) => {
     e.preventDefault();
 
+    // Ensure the inputted email matches the required institute domain address rules
     // Validation Check
     if (isStudent && !email.endsWith('@iitk.ac.in')) {
       setEmailError('Please enter a valid @iitk.ac.in email address.');
@@ -27,7 +30,7 @@ const ForgotPassword = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/users/forgotPassword', {
+      const response = await fetch(`${BASE_URL}/api/users/forgotPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,6 +52,7 @@ const ForgotPassword = () => {
     }
   };
 
+  // Render the components for the forgot password page with adaptable styling based on role
   return (
     <div className="forgot-page">
       <div className={`forgot-left-panel ${isStudent ? 'bg-blue-theme' : 'bg-yellow-theme'}`}>

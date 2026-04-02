@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import './ForgotPassword.css';
@@ -9,6 +10,7 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Parse token from navigation parameters and extract expected visual role variant
   // Read the role from query parameters (e.g., ?role=owner)
   const queryParams = new URLSearchParams(location.search);
   const role = queryParams.get('role') || 'Student'; // Default to student
@@ -20,6 +22,7 @@ const ResetPassword = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Evaluate form passwords enforcing conditions and dispatch patch request securely
   const handleReset = async (e) => {
     e.preventDefault();
 
@@ -38,7 +41,7 @@ const ResetPassword = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/resetPassword/${token}`, {
+      const response = await fetch(`${BASE_URL}/api/users/resetPassword/${token}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -67,6 +70,7 @@ const ResetPassword = () => {
 
   return (
     <div className="forgot-page">
+      {/* Side panel displaying appropriate branding illustration driven by user role */}
       <div className={`forgot-left-panel ${isOwner ? 'bg-yellow-theme' : 'bg-blue-theme'}`}>
         <img 
           src={isOwner ? canteenLogo : studentLogo} 

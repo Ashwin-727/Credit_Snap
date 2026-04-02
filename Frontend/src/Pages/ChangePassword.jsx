@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState } from 'react';
 import { Lock, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useLocation } from 'react-router-dom'; 
@@ -8,6 +9,7 @@ export default function ChangePassword() {
   const { showAlert } = useNotifications();
   const location = useLocation(); 
   const isOwner = location.pathname.includes('/owner'); 
+  // Maintain controlled form states capturing current, new, and repeated password inputs
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
@@ -28,6 +30,7 @@ export default function ChangePassword() {
     });
   };
 
+  // Intercept form submission, validate constraints, and orchestrate the auth API request
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -58,7 +61,7 @@ export default function ChangePassword() {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/users/updatePassword', {
+      const response = await fetch(`${BASE_URL}/api/users/updatePassword`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -76,11 +79,11 @@ export default function ChangePassword() {
         showAlert("Password Updated", "Your password has been changed successfully!", "success");
         setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' }); 
         
-        // Sync fresh token and user data to both storage mechanisms
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
+        // Keep fresh auth in the current session only
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('user', JSON.stringify(data.data.user));
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       } else {
         showAlert("Failed", data.message || "Failed to update password. Please check your credentials.", "error");
       }
@@ -108,6 +111,7 @@ export default function ChangePassword() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           
+          {/* Render input field for existing password with toggleable visibility icon */}
           {/* Current Password */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Current Password</label>

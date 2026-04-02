@@ -1,16 +1,16 @@
-# React + Vite
+# 📸 Credit Snap - Team 6
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Credit Snap** is a digital ledger and integrated payment platform designed to modernize the traditional "khata" (credit) system in college canteens. Built specifically for the **IIT Kanpur** ecosystem, it provides a transparent, real-time interface for students to track their dues and for canteen owners to manage their receivables efficiently.
 
-Currently, two official plugins are available:
+## 🚀 Project Goal
+Our goal is to eliminate manual bookkeeping errors and payment delays in campus canteens by providing a secure, high-performance web application that handles micro-credits and digital settlements seamlessly.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🛠️ Core Stack
+* **Frontend:** React.js (Vite)
+* **Backend:** Node.js & Express.js
+* **Database:** MongoDB Atlas
+* **Real-time:** Socket.io
+* **Payments:** Razorpay API
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+*Developed by Team 6 as part of the Software Engineering Course Implementation (2026).*

@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './Login.css';
@@ -8,10 +9,11 @@ const VerifyEmail = () => {
   const [status, setStatus] = useState('Verifying your email...');
   const called = useRef(false);
 
+  // Automatically trigger API validation for the email token exactly once upon component mount
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/users/verifyEmail/${token}`, {
+        const response = await fetch(`${BASE_URL}/api/users/verifyEmail/${token}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -23,6 +25,7 @@ const VerifyEmail = () => {
         if (data.status === 'success') {
           setStatus('Email verified successfully! Redirecting to login...');
           
+          // Pause execution allowing the user to observe the success state before redirecting
           // Wait a brief moment so they can read the success message
           setTimeout(() => {
             navigate('/');
@@ -41,6 +44,7 @@ const VerifyEmail = () => {
     }
   }, [token, navigate]);
 
+  // Render minimal feedback interface displaying dynamic connection success or failure alerts
   return (
     <div className="login-page">
       <div className="login-right-panel" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

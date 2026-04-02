@@ -1,3 +1,4 @@
+import { BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Search, ChevronDown, Plus, Edit3, AlertTriangle, X, Trash2 } from 'lucide-react';
@@ -16,6 +17,7 @@ export default function OwnerEditMenu() {
   // ==========================================
   // 2. INTERACTION STATE (Modals & Filters)
   // ==========================================
+  // State variables for manipulating UI filters, search texts, and dynamic sorting
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeSort, setActiveSort] = useState('');
@@ -37,6 +39,7 @@ export default function OwnerEditMenu() {
   // ==========================================
   // 3. API FETCH (On Page Load)
   // ==========================================
+  // Pull current canteen details to retrieve the owner's assigned menu catalog
   useEffect(() => {
     const fetchCanteenAndMenu = async () => {
       try {
@@ -44,7 +47,7 @@ export default function OwnerEditMenu() {
 
         // 🏆 FIXED: If user jumped straight to edit menu, fetch their Canteen ID securely!
         if (!currentCanteenId) {
-          const canteenRes = await axios.get('http://localhost:5000/api/canteens/my', {
+          const canteenRes = await axios.get(`${BASE_URL}/api/canteens/my`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           currentCanteenId = canteenRes.data.data.canteen._id;
@@ -52,7 +55,7 @@ export default function OwnerEditMenu() {
         }
 
         // Now fetch the actual menu items using the real Canteen ID
-        const res = await axios.get(`http://localhost:5000/api/canteens/${currentCanteenId}/menu`, {
+        const res = await axios.get(`${BASE_URL}/api/canteens/${currentCanteenId}/menu`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -69,13 +72,14 @@ export default function OwnerEditMenu() {
   // 4. HANDLERS (Integrated with Backend)
   // ==========================================
 
+  // Flip the active status of an item and instantly update the server database
   // --- TOGGLE AVAILABILITY ---
   const toggleAvailability = async (id) => {
     const item = menuItems.find(i => i.id === id);
     if (!item) return;
 
     try {
-      await axios.put(`http://localhost:5000/api/canteens/menu/${id}`,
+      await axios.put(`${BASE_URL}/api/canteens/menu/${id}`,
         { isAvailable: !item.isAvailable },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -110,7 +114,7 @@ export default function OwnerEditMenu() {
   }
 
   try {
-    const res = await axios.post(`http://localhost:5000/api/canteens/${activeCanteenId}/menu`,
+    const res = await axios.post(`${BASE_URL}/api/canteens/${activeCanteenId}/menu`,
       { 
         name: newName, 
         price: parseFloat(newPrice), 
@@ -149,7 +153,7 @@ export default function OwnerEditMenu() {
 
     // 2. Send updates to Database
     try {
-      const res = await axios.put(`http://localhost:5000/api/canteens/menu/${itemToEdit.id}`,
+      const res = await axios.put(`${BASE_URL}/api/canteens/menu/${itemToEdit.id}`,
         { name: editName, price: parseFloat(editPrice) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -176,7 +180,7 @@ export default function OwnerEditMenu() {
       "Are you sure you want to delete this item? This action cannot be undone.",
       async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/canteens/menu/${id}`, {
+          await axios.delete(`${BASE_URL}/api/canteens/menu/${id}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 

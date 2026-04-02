@@ -1,16 +1,100 @@
+import { BASE_URL } from '../config';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Home, Edit, Wallet, BarChart2, History, HelpCircle, Bell, UserCircle, Settings, LogOut, ShoppingBag, CheckCircle, AlertTriangle, IndianRupee, X } from 'lucide-react';
+import { Menu, Home, Edit, Wallet, BarChart2, History, HelpCircle, Bell, UserCircle, Settings, LogOut, ShoppingBag, CheckCircle, AlertTriangle, IndianRupee, X, IndianRupee as RupeeIcon } from 'lucide-react';
 import canteenLogo from '../assets/Canteen_without_bg_logo.png';
-import { io } from 'socket.io-client'; 
+import { io } from 'socket.io-client';
+
+const NOTIFICATION_STORAGE_PREFIX = 'creditsnap:notifications';
+const MAX_NOTIFICATIONS = 20;
+
+const getStoredUser = () => {
+  try {
+    const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+    if (!userStr) return null;
+
+    const user = JSON.parse(userStr);
+    if (!user?._id || !user?.role) return null;
+
+    return user;
+  } catch {
+    return null;
+  }
+};
+
+const getNotificationStorageKey = () => {
+  const user = getStoredUser();
+  if (!user) return null;
+
+  return `${NOTIFICATION_STORAGE_PREFIX}:${user.role}:${user._id}`;
+};
+
+const normalizeNotifications = (notifications) => {
+  if (!Array.isArray(notifications)) return [];
+
+  return notifications
+    .filter((notification) => (
+      notification &&
+      notification.id !== undefined &&
+      typeof notification.title === 'string' &&
+      typeof notification.message === 'string'
+    ))
+    .slice(0, MAX_NOTIFICATIONS);
+};
+
+const loadStoredNotifications = () => {
+  const key = getNotificationStorageKey();
+  if (!key) return [];
+
+  try {
+    const rawNotifications = sessionStorage.getItem(key);
+    if (!rawNotifications) return [];
+
+    return normalizeNotifications(JSON.parse(rawNotifications));
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredNotifications = (notifications) => {
+  const key = getNotificationStorageKey();
+  if (!key) return;
+
+  try {
+    sessionStorage.setItem(key, JSON.stringify(normalizeNotifications(notifications)));
+  } catch {
+    // Ignore storage failures so notifications continue working in memory.
+  }
+};
+
+const clearStoredNotifications = () => {
+  const key = getNotificationStorageKey();
+  if (!key) return;
+
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures during logout cleanup.
+  }
+};
 
 export default function OwnerLayout() {
   const navigate = useNavigate();
   const location = useLocation(); 
 
-  const [userProfile, setUserProfile] = useState({ name: "Loading...", role: "Canteen Owner" }); 
-  const [notifications, setNotifications] = useState([]);
+  const [userProfile, setUserProfile] = useState({ name: "Loading...", role: "Canteen Owner" });
+  const [notifications, setNotifications] = useState(() => loadStoredNotifications());
+  const [paymentToast, setPaymentToast] = useState(null); // { studentName, amount }
+  const paymentToastTimer = useRef(null);
+  const recentNotificationKeysRef = useRef(new Map());
 
+  const showPaymentToast = useCallback((studentName, amount) => {
+    if (paymentToastTimer.current) clearTimeout(paymentToastTimer.current);
+    setPaymentToast({ studentName, amount });
+    paymentToastTimer.current = setTimeout(() => setPaymentToast(null), 5000);
+  }, []);
+
+  // Manage array of short-lived notification objects for displaying real-time UI alerts
   // Helper to push a new notification
   const addNotification = useCallback((type, title, message) => {
     setNotifications(prev => [{
@@ -23,66 +107,41 @@ export default function OwnerLayout() {
     }, ...prev].slice(0, 20));
   }, []);
 
+  // Initialize and synchronize websocket connections to dispatch background events dynamically
+  const shouldSkipDuplicateNotification = useCallback((key, ttlMs = 5000) => {
+    const now = Date.now();
+    const recentNotificationKeys = recentNotificationKeysRef.current;
+
+    for (const [storedKey, timestamp] of recentNotificationKeys.entries()) {
+      if (now - timestamp > ttlMs) {
+        recentNotificationKeys.delete(storedKey);
+      }
+    }
+
+    if (recentNotificationKeys.has(key)) {
+      return true;
+    }
+
+    recentNotificationKeys.set(key, now);
+    return false;
+  }, []);
+
   // Socket.IO: Live owner notifications
   useEffect(() => {
-    const canteenId = sessionStorage.getItem('canteenId');
-    if (!canteenId) return;
+    let socket;
+    let isCancelled = false;
 
-    const socket = io('http://localhost:5000');
-    socket.on('connect', () => socket.emit('join-canteen', canteenId));
-
-    // New order placed by a student
-    socket.on('newOrder', (order) => {
-      const studentName = order.student?.name || 'A student';
-      const items = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'an order';
-      addNotification('info', `New Order 🛍️`, `${studentName} placed: ${items} (₹${order.totalAmount})`);
-    });
-
-    // Debt limit warnings — emitted by backend on debt-updated
-    socket.on('debt-threshold', ({ studentName, pct, amountOwed, limit }) => {
-      if (pct >= 100) {
-        addNotification('error', 'Debt Limit Reached!', `${studentName} has hit the ₹${limit} limit (₹${amountOwed} owed). No new orders possible.`);
-      } else if (pct >= 80) {
-        addNotification('warning', 'Debt Warning (80%+)', `${studentName} is at ₹${amountOwed} — ${Math.round(pct)}% of the ₹${limit} limit.`);
-      }
-    });
-
-    // Offline payment received
-    socket.on('debt-updated', () => {
-      // Generic refresh hint; specific events come via debt-threshold
-    });
-
-    return () => socket.disconnect();
-  }, [addNotification]);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  const clearAll = () => setNotifications([]);
-
-  const notifIcon = (type) => {
-    if (type === 'success') return <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />;
-    if (type === 'error')   return <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />;
-    if (type === 'warning') return <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />;
-    return <ShoppingBag className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />;
-  };
-
-  const timeAgo = (date) => {
-    const diff = Math.floor((Date.now() - new Date(date)) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}h ago`;
-  };
-
-  useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchProfileAndJoinSocket = async () => {
       try {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch('http://localhost:5000/api/users/my-profile', {
+        const response = await fetch(`${BASE_URL}/api/users/my-profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
+
+        if (isCancelled) return;
         
         if (data.status === 'success') {
           const user = data.data.user;
@@ -93,17 +152,67 @@ export default function OwnerLayout() {
             role: "Canteen Owner",
             profilePhoto: user.profilePhoto || null
           });
+
+          // Always persist canteenId so other pages can use it
+          if (canteen?._id) {
+            sessionStorage.setItem('canteenId', canteen._id);
+            localStorage.setItem('canteenId', canteen._id);
+          }
+
+          // Join socket room using the canteenId from the API (not sessionStorage)
+          const canteenId = canteen?._id;
+          if (canteenId) {
+            socket = io(`${BASE_URL}`);
+            socket.on('connect', () => socket.emit('join-canteen', canteenId));
+
+            socket.on('newOrder', (order) => {
+              const firstItemName = order.items?.[0]?.name;
+              const isDebtPayment =
+                firstItemName === 'Offline Debt Payment' ||
+                firstItemName === 'Online Debt Payment';
+              if (isDebtPayment) return;
+              if (order?._id && shouldSkipDuplicateNotification(`new-order:${order._id}`)) return;
+
+              const studentName = order.student?.name || 'A student';
+              const items = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'an order';
+              addNotification('info', `New Order 🛍️`, `${studentName} placed: ${items} (₹${order.totalAmount})`);
+            });
+
+            socket.on('debt-threshold', ({ studentName, pct, amountOwed, limit }) => {
+              if (pct >= 100) {
+                addNotification('error', 'Debt Limit Reached!', `${studentName} has hit the ₹${limit} limit (₹${amountOwed} owed). No new orders possible.`);
+              } else if (pct >= 80) {
+                addNotification('warning', 'Debt Warning (80%+)', `${studentName} is at ₹${amountOwed} — ${Math.round(pct)}% of the ₹${limit} limit.`);
+              }
+            });
+
+            socket.on('debt-updated', () => {
+              // Generic refresh hint; specific events come via debt-threshold
+            });
+
+            socket.on('payment-received', (data) => {
+              addNotification('success', `Payment Received 💰`, `${data.studentName} paid ₹${data.amount} online.`);
+              showPaymentToast(data.studentName, data.amount);
+            });
+          }
         }
       } catch (error) {
         console.error('Failed to fetch profile for layout:', error);
       }
     };
     
-    fetchProfile();
-  }, [location.pathname]); 
+    fetchProfileAndJoinSocket();
+
+    return () => {
+      isCancelled = true;
+      if (socket) socket.disconnect();
+    };
+  }, [location.pathname, addNotification, showPaymentToast, shouldSkipDuplicateNotification]);
+
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // Control visual expansion layout for the primary navigation side panel
   // --- NEW: Sidebar Toggle State ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -122,6 +231,28 @@ export default function OwnerLayout() {
   const toggleNotifications = () => { setIsNotificationsOpen(!isNotificationsOpen); setIsProfileOpen(false); };
   const toggleProfile = () => { setIsProfileOpen(!isProfileOpen); setIsNotificationsOpen(false); };
   const isActive = (path) => location.pathname.includes(path);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const clearAll = () => setNotifications([]);
+
+  useEffect(() => {
+    saveStoredNotifications(notifications);
+  }, [notifications]);
+
+  const notifIcon = (type) => {
+    if (type === 'success') return <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />;
+    if (type === 'error')   return <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />;
+    if (type === 'warning') return <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />;
+    return <ShoppingBag className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />;
+  };
+
+  const timeAgo = (date) => {
+    const diff = Math.floor((Date.now() - new Date(date)) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
@@ -170,7 +301,7 @@ export default function OwnerLayout() {
           </nav>
         </div>
         
-        {/* --- MERGED: About us button keeps navigation, active state styling, AND collapsible sidebar logic --- */}
+        {/*About us button keeps navigation, active state styling, AND collapsible sidebar logic --- */}
         <div 
           onClick={() => navigate('/owner/about')} 
           className={`p-4 border-t border-slate-700 flex justify-center items-center cursor-pointer transition-all duration-300 ${isActive('about') ? 'bg-[#eab308] text-[#1e293b]' : 'hover:bg-slate-700 text-gray-300'}`}
@@ -194,7 +325,35 @@ export default function OwnerLayout() {
                onError={(e) => e.target.src = "https://via.placeholder.com/150x50?text=Logo+Here"} 
              />
           </div>
-          
+
+          {/* ── PAYMENT TOAST ── centered between logo and bell ── */}
+          <div className="flex-1 flex justify-center items-center pointer-events-none">
+            <div
+              className={`pointer-events-auto flex items-center gap-3 bg-[#1e293b] border border-[#eab308]/50 shadow-lg rounded-2xl px-4 py-2.5 transition-all duration-500 ${
+                paymentToast
+                  ? 'opacity-100 translate-y-0 scale-100'
+                  : 'opacity-0 -translate-y-3 scale-95 pointer-events-none'
+              }`}
+              style={{ minWidth: '260px', maxWidth: '380px' }}
+            >
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#eab308]/20 shrink-0">
+                <IndianRupee className="w-4 h-4 text-[#eab308]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-[#eab308] tracking-wide uppercase">Payment Received 💰</p>
+                <p className="text-sm text-white font-medium truncate">
+                  {paymentToast?.studentName} paid <span className="text-[#eab308] font-bold">₹{paymentToast?.amount}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => { setPaymentToast(null); clearTimeout(paymentToastTimer.current); }}
+                className="text-gray-400 hover:text-white transition shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-6 pr-2">
             
             <div className="relative" ref={notificationRef}>
@@ -270,7 +429,17 @@ export default function OwnerLayout() {
                     <div onClick={() => { navigate('/owner/profile'); setIsProfileOpen(false); }} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 text-sm text-gray-700 transition">
                       <Settings className="w-4 h-4" /> Canteen Settings
                     </div>
-                    <div onClick={() => { navigate('/'); setIsProfileOpen(false); }} className="px-4 py-3 hover:bg-red-50 cursor-pointer flex items-center gap-3 text-sm text-red-600 font-medium transition border-t border-gray-100">
+                    <div onClick={() => {
+                      clearStoredNotifications();
+                      sessionStorage.removeItem('token');
+                      sessionStorage.removeItem('user');
+                      sessionStorage.removeItem('canteenId');
+                      localStorage.removeItem('token');
+                      localStorage.removeItem('user');
+                      localStorage.removeItem('canteenId');
+                      navigate('/');
+                      setIsProfileOpen(false);
+                    }} className="px-4 py-3 hover:bg-red-50 cursor-pointer flex items-center gap-3 text-sm text-red-600 font-medium transition border-t border-gray-100">
                       <LogOut className="w-4 h-4" /> Logout
                     </div>
                   </div>

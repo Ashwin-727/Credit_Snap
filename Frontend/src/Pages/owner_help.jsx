@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function Help() {
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndexes, setOpenIndexes] = useState([]);
 
+  // Static content array holding frequently asked questions and their comprehensive answers
   const faqs = [
     {
       question: "How to edit menu",
@@ -11,24 +12,29 @@ export default function Help() {
     },
     {
       question: "Payment related issues",
-      answer: "Details regarding payment related issues will appear here."
+      answer: "If a student claims they made an online payment but it hasn't reflected, ask them to check their bank statement. Our automated Razorpay integration typically updates the debt instantly upon successful verification. If significant problems persist, reach out to support."
     },
     {
       question: "Understand what is Credit",
-      answer: "Information explaining how credit works will appear here."
+      answer: "Credit represents the amount a student owes your canteen. Every student has a predefined 'Debt Limit' (default is ₹3000). If a student's outstanding debt reaches this limit, they are automatically blocked from placing new online orders until they clear their dues."
     },
     {
       question: "Updating Personal Information",
-      answer: "Steps to update your personal information will appear here."
+      answer: "To update your canteen's name, operating timings, or your admin details, click on your profile icon at the top right corner, select 'Canteen Settings', and click the 'Edit Profile' button to make modifications."
     },
     {
       question: "How to clear Debt manually",
-      answer: "Instructions on manually clearing debt will appear here."
+      answer: "If a student pays you offline (via cash or direct UPI), navigate to the 'Active Debts' section, search for the student, click on the 'Clear Debt' button, and enter the exact amount they paid to manually reduce their outstanding balance."
     }
   ];
 
+  // Handle accordion logic to expand or collapse specific FAQ answers independently
   const toggleFaq = (index) => {
-    setOpenIndex(openIndex === index ? null : index);
+    setOpenIndexes((currentIndexes) => (
+      currentIndexes.includes(index)
+        ? currentIndexes.filter((currentIndex) => currentIndex !== index)
+        : [...currentIndexes, index]
+    ));
   };
 
   return (
@@ -43,7 +49,7 @@ export default function Help() {
           {faqs.map((faq, index) => (
             <div 
               key={index} 
-              className={`border-b border-gray-200 last:border-0 ${openIndex === index ? 'bg-white' : ''}`}
+              className={`border-b border-gray-200 last:border-0 ${openIndexes.includes(index) ? 'bg-white' : ''}`}
             >
               <button
                 onClick={() => toggleFaq(index)}
@@ -51,7 +57,7 @@ export default function Help() {
                 className="w-full text-left px-8 py-4 flex justify-between items-center focus:outline-none hover:bg-gray-50 transition-colors"
               >
                 <span className="font-medium text-lg lg:text-xl text-gray-800">{faq.question}</span>
-                {openIndex === index ? (
+                {openIndexes.includes(index) ? (
                   <ChevronDown className="w-6 h-6 text-gray-800 flex-shrink-0" />
                 ) : (
                   <ChevronRight className="w-6 h-6 text-gray-800 flex-shrink-0" />
@@ -59,7 +65,7 @@ export default function Help() {
               </button>
               
               {/* Expanded Content */}
-              {openIndex === index && (
+              {openIndexes.includes(index) && (
                 <div className="px-8 pb-5 text-gray-600 text-[15px] lg:text-base leading-relaxed pr-12">
                   {faq.answer}
                 </div>

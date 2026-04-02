@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --testTimeout=5000",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
@@ -19,9 +20,14 @@
     "mongodb": "^7.1.0",
     "mongoose": "^9.3.1",
     "nodemailer": "^8.0.3",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "cross-env": "^10.1.0",
+    "jest": "^30.3.0",
+    "mongodb-memory-server": "^11.0.1",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
   }
 }
