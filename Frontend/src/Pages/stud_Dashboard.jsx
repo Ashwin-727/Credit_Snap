@@ -45,7 +45,7 @@ const formatOrderDate = (dateString) => {
  * Renders an individual order card.
  * If the order is 'pending', the card becomes clickable and expands to reveal action buttons.
  */
-const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
+const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder, onDismissOrder }) => {
   // Controls the slide-down action menu for pending orders
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -53,6 +53,7 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
   const canteenName = order.canteen?.name || 'Unknown Canteen';
   const orderItems = order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Unknown Items';
   const isPending = order.status === 'pending';
+  const canDismiss = order.status === 'cancelled' || order.status === 'rejected';
 
   return (
     <div
@@ -82,6 +83,16 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder }) => {
             {/* Dropdown chevron only shows for pending orders */}
             {isPending && (
               <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+            )}
+            {/* Dismiss button shows for cancelled/rejected orders */}
+            {canDismiss && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDismissOrder(order._id); }}
+                className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Dismiss from dashboard"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
           </div>
           <span className="font-semibold text-blue-900">
@@ -184,6 +195,7 @@ export default function StudDashboard() {
         if (res.data.status === 'success') {
           const now = new Date();
           const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+          const dismissed = JSON.parse(localStorage.getItem('dismissedOrders') || '[]');
 
           // Filter out system "payment" orders and orders older than 48 hours
           const recentActualOrders = res.data.data.filter(order => {
@@ -191,6 +203,9 @@ export default function StudDashboard() {
             const isPayment = order.items && order.items.length > 0 &&
               (order.items[0].name === 'Offline Debt Payment' || order.items[0].name === 'Online Debt Payment');
             if (isPayment) return false;
+
+            // Hide dismissed orders
+            if (dismissed.includes(order._id)) return false;
 
             // Only show orders from the last 2 days
             const orderDate = new Date(order.createdAt);
@@ -245,6 +260,16 @@ export default function StudDashboard() {
   // ------------------------------------------
   // ACTION HANDLERS
   // ------------------------------------------
+
+  // Dismisses a cancelled/rejected order from the dashboard view
+  const handleDismissOrder = (orderId) => {
+    const dismissed = JSON.parse(localStorage.getItem('dismissedOrders') || '[]');
+    if (!dismissed.includes(orderId)) {
+      dismissed.push(orderId);
+      localStorage.setItem('dismissedOrders', JSON.stringify(dismissed));
+    }
+    setCurrentOrders(prev => prev.filter(o => o._id !== orderId));
+  };
 
   // Safely cancels an order via the API and updates local UI state
   const handleCancelOrder = (orderId) => {
@@ -359,6 +384,7 @@ export default function StudDashboard() {
                 order={order}
                 onCancelOrder={handleCancelOrder}
                 onChangeOrder={handleChangeOrder}
+                onDismissOrder={handleDismissOrder}
               />
             ))
           )}
