@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "cross-env NODE_ENV=test jest --testTimeout=5000"
+    "test": "node --test --test-isolation=none tests/paymentController.test.js"
   },
   "keywords": [],
   "author": "",
