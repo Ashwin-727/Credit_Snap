@@ -40,7 +40,8 @@ exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
       price: numericAmount
     }],
     totalAmount: numericAmount,
-    status: 'accepted'
+    status: 'accepted',
+    balanceSnapshot: Math.max(0, hydratedDebt.amountOwed)
   });
 
   return {
@@ -48,3 +49,4 @@ exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
     studentTotalDebt: student.totalDebt
   };
 };
+

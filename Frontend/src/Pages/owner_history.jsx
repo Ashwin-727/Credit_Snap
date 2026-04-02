@@ -81,16 +81,21 @@ export default function OwnerHistory() {
             time: timeStr
           };
 
+          // Handle specific assignment for Debt records
           if (isDebtPayment) {
             formattedDebts.push({
               ...baseData,
-              remainingDebt: debtMap[studentId] || 0,
+              remainingDebt: order.balanceSnapshot !== undefined && order.balanceSnapshot !== null 
+                               ? order.balanceSnapshot 
+                               : (debtMap[studentId] || 0),
               paymentType: 'Offline' // item name 'Offline Debt Payment' identifies this
             });
           } else if (order.items && order.items.length > 0 && order.items[0].name === 'Online Debt Payment') {
             formattedDebts.push({
               ...baseData,
-              remainingDebt: debtMap[studentId] || 0,
+              remainingDebt: order.balanceSnapshot !== undefined && order.balanceSnapshot !== null 
+                               ? order.balanceSnapshot 
+                               : (debtMap[studentId] || 0),
               paymentType: 'Online'
             });
           } else {
@@ -350,3 +355,4 @@ export default function OwnerHistory() {
     </div>
   );
 }
+
