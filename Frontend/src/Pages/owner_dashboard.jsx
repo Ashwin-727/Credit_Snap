@@ -1,7 +1,7 @@
 import { BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { io } from 'socket.io-client';
+import { socket } from '../socket';
 import { useNotifications } from '../context/NotificationContext';
 
 export default function OwnerDashboard() {
@@ -76,14 +76,7 @@ export default function OwnerDashboard() {
   useEffect(() => {
     if (!canteen || !canteen._id) return;
 
-    const socket = io(`${BASE_URL}`);
-    const canteenIdStr = canteen._id;
-
-    socket.on('connect', () => {
-      socket.emit('join-canteen', canteenIdStr);
-    });
-
-    socket.on('newOrder', (newOrder) => {
+    const handleNewOrder = (newOrder) => {
       console.log('🔔 New real-time order received!', newOrder);
       const firstItemName = newOrder.items?.[0]?.name;
       const isDebtPayment =
@@ -93,14 +86,18 @@ export default function OwnerDashboard() {
       if (!isDebtPayment) {
         setOrders(prevOrders => [newOrder, ...prevOrders]);
       }
-    });
+    };
 
-    socket.on('payment-received', (data) => {
+    const handlePayment = (data) => {
       showAlert(`💰 Payment Received!`, `${data.studentName} paid ₹${data.amount} online.`, 'success');
-    });
+    };
+
+    socket.on('newOrder', handleNewOrder);
+    socket.on('payment-received', handlePayment);
 
     return () => {
-      socket.disconnect();
+      socket.off('newOrder', handleNewOrder);
+      socket.off('payment-received', handlePayment);
     };
   }, [canteen]);
 

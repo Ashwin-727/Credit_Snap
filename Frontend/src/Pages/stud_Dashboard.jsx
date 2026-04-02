@@ -2,7 +2,7 @@ import { BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, X } from 'lucide-react';
 import axios from 'axios';
-import { io } from 'socket.io-client';
+import { socket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -209,36 +209,31 @@ export default function StudDashboard() {
     fetchTotalDebt();
   }, []);
 
-  // 2. Real-time Socket Connection
+  // 2. Real-time Socket Connection (Shared)
   useEffect(() => {
     const userStr = sessionStorage.getItem('user');
     if (!userStr) return;
-    const user = JSON.parse(userStr);
-    const userIdStr = user._id;
 
-    // Connect to the WebSocket server
-    const socket = io(`${BASE_URL}`);
-    socket.on('connect', () => {
-      socket.emit('join-student', userIdStr); // Join user-specific room for targeted notifications
-    });
-
-    // Listener: Updates the UI instantly when a canteen accepts/rejects an order
-    socket.on('orderStatusUpdated', (updatedOrder) => {
+    const handleOrderStatus = (updatedOrder) => {
       setCurrentOrders((prevOrders) =>
         prevOrders.map((order) =>
           order._id === updatedOrder._id ? updatedOrder : order
         )
       );
-    });
+    };
 
-    // Listener: Refreshes the debt hero banner instantly if a payment is processed
-    socket.on('debt-updated', () => {
+    const handleDebtUpdated = () => {
       fetchTotalDebt();
-    });
+    };
 
-    // Cleanup: Disconnect when the user leaves the dashboard
+    // Attach listeners
+    socket.on('orderStatusUpdated', handleOrderStatus);
+    socket.on('debt-updated', handleDebtUpdated);
+
+    // Cleanup: Disconnect listeners when the user leaves the dashboard
     return () => {
-      socket.disconnect();
+      socket.off('orderStatusUpdated', handleOrderStatus);
+      socket.off('debt-updated', handleDebtUpdated);
     };
   }, []);
 
