@@ -214,7 +214,8 @@ const StudentCanteens = () => {
   // ORDER SUBMISSION
   // ==========================================
   const handlePlaceDebtRequest = async () => {
-    if (Object.keys(cart).length === 0) {
+    const validItems = Object.values(cart).filter(qty => qty !== '' && qty > 0);
+    if (validItems.length === 0) {
       showAlert("Cart Empty", "Your cart is empty! Please add some items before ordering.", "warning");
       return;
     }
@@ -525,7 +526,7 @@ const StudentCanteens = () => {
               </div>
 
               {/* Add to Cart button OR +/- Controls */}
-              {!cart[item._id] ? (
+              {cart[item._id] === undefined ? (
                 <button
                   className="cursor-pointer bg-[#f97316] hover:bg-[#ea580c] text-white px-6 py-2.5 rounded-xl font-medium transition text-base shadow-sm"
                   onClick={() => updateQuantity(item._id, 1)}
@@ -637,7 +638,7 @@ const StudentCanteens = () => {
           <button
             className="cursor-pointer w-full bg-[#1e293b] hover:bg-slate-800 text-white py-4 rounded-xl font-medium text-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed"
             onClick={handlePlaceDebtRequest}
-            disabled={Object.keys(cart).length === 0}
+            disabled={Object.values(cart).every(qty => qty === '' || qty <= 0)}
           >
             Confirm & Place Request
           </button>
@@ -645,7 +646,7 @@ const StudentCanteens = () => {
       )}
 
       {/* --- CART FOOTER (Floating Bar) --- */}
-      {step === 'menu' && Object.keys(cart).length > 0 && (
+      {step === 'menu' && Object.values(cart).some(qty => qty !== '' && qty > 0) && (
         <div className="fixed bottom-0 right-0 w-[calc(100%-192px)] bg-white border-t border-gray-200 px-10 py-5 flex justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
           <div className="flex items-center gap-4">
             <div className="bg-[#f97316]/10 p-3 rounded-full">

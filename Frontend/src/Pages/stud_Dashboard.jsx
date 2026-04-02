@@ -163,10 +163,12 @@ export default function StudDashboard() {
         // Generate alert notifications if any individual canteen debt approaches the limit
         const generatedAlerts = [];
         res.data.data.forEach(d => {
-          if (d.amountOwed >= 2400) { // 2400 is 80% of the assumed 3000 limit
+          const limit = d.limit || 3000;
+          const warningThreshold = limit * 0.8;
+          if (d.amountOwed >= warningThreshold) {
             generatedAlerts.push({
               canteen: d.canteen?.name || "Unknown Canteen",
-              message: `Debt is at ₹${d.amountOwed} (≥80% of ₹3000 limit)`
+              message: `Debt is at ₹${d.amountOwed} (≥80% of ₹${limit} limit)`
             });
           }
         });
