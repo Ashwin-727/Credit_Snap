@@ -327,6 +327,17 @@ export default function StudDashboard() {
   // RENDER UI
   // ------------------------------------------
 
+  // Sort orders: 'pending' first, then sort the rest by date (newest first)
+  const sortedOrders = [...currentOrders].sort((a, b) => {
+    // 1. Put pending orders at the top
+    if (a.status === 'pending' && b.status !== 'pending') return -1;
+    if (a.status !== 'pending' && b.status === 'pending') return 1;
+    
+    // 2. If statuses are the same (both pending, both cancelled, etc.), sort by newest date
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+
   return (
     <main className="p-8 overflow-y-auto flex-1 bg-gray-50 min-h-screen">
 
@@ -373,12 +384,12 @@ export default function StudDashboard() {
       <div>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">Current Orders:</h2>
         <div className="space-y-4">
-          {currentOrders.length === 0 ? (
+          {sortedOrders.length === 0 ? (
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 text-center">
               <p className="text-gray-500">You have no active orders. Go to Canteens to order some food!</p>
             </div>
           ) : (
-            currentOrders.map((order) => (
+            sortedOrders.map((order) => (
               <ActiveOrderCard
                 key={order._id}
                 order={order}
