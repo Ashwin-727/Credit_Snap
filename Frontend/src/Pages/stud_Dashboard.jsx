@@ -75,8 +75,8 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder, onDismissOrder }
           <div className="flex items-center gap-2">
             {/* Dynamic Status Badge */}
             <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                order.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                  'bg-red-100 text-red-700'
+              order.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                'bg-red-100 text-red-700'
               }`}>
               {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
             </span>
@@ -86,7 +86,7 @@ const ActiveOrderCard = ({ order, onCancelOrder, onChangeOrder, onDismissOrder }
             )}
             {/* Dismiss button shows for cancelled/rejected orders */}
             {canDismiss && (
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); onDismissOrder(order._id); }}
                 className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                 title="Dismiss from dashboard"
