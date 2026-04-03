@@ -324,9 +324,18 @@ const StudentCanteens = () => {
 
   // Handles button clicks (+ / -)
   const updateQuantity = (id, delta) => {
+    if (delta > 0 && (cart[id] || 0) >= 100) {
+      showAlert("Limit Exceeded", "Quantity cannot exceed 100 for a single item.", "warning");
+      return;
+    }
+
     setCart(prev => {
       const currentQty = prev[id] === '' ? 0 : (prev[id] || 0);
-      const newQty = currentQty + delta;
+      let newQty = currentQty + delta;
+
+      if (newQty > 100) {
+        newQty = 100;
+      }
 
       // Remove item from cart if quantity drops to 0 or below
       if (newQty <= 0) {
@@ -340,6 +349,10 @@ const StudentCanteens = () => {
 
   // Handles direct user typing in the input field
   const setAbsoluteQuantity = (id, value) => {
+    if (value !== '' && value > 100) {
+      showAlert("Limit Exceeded", "Quantity cannot exceed 100 for a single item.", "warning");
+      value = 100;
+    }
     setCart(prev => ({ ...prev, [id]: value }));
   };
 
