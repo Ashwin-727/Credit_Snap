@@ -24,6 +24,16 @@ export default function OwnerHistory() {
   const [filterAmount, setFilterAmount] = useState({ min: '', max: '' });
   const [filterDate, setFilterDate] = useState({ start: '', end: '' });
 
+  const [expandedRecords, setExpandedRecords] = useState(new Set());
+  const toggleRecord = (id) => {
+    setExpandedRecords(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
   // History data state
   const [historyData, setHistoryData] = useState({ orders: [], debts: [] });
   const [loading, setLoading] = useState(true);
@@ -96,7 +106,8 @@ export default function OwnerHistory() {
               remainingDebt: order.balanceSnapshot !== undefined && order.balanceSnapshot !== null 
                                ? order.balanceSnapshot 
                                : (debtMap[studentId] || 0),
-              paymentType: 'Online'
+              paymentType: 'Online',
+              transactionId: order.transactionId || null
             });
           } else {
             const itemsStr = order.items && order.items.length > 0
@@ -342,8 +353,23 @@ export default function OwnerHistory() {
                   <span className="text-gray-300">•</span>
                   <span className="flex items-center"><Clock className="w-4 h-4 mr-1.5 text-gray-400" /> {record.time}</span>
                 </div>
+                
+                {activeTab === 'debt' && record.paymentType === 'Online' && record.transactionId && (
+                  <button onClick={() => toggleRecord(record.id)} className="mt-2 text-gray-500 hover:text-gray-700 transition flex items-center text-sm font-medium">
+                    Transaction ID <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${expandedRecords.has(record.id) ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
               </div>
 
+              {/* Expandable Section */}
+              {expandedRecords.has(record.id) && (
+                <div className="mt-4 pt-4 border-t border-gray-100 w-full animate-in fade-in slide-in-from-top-2 transition-all basis-full">
+                  <div className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                     <span className="text-gray-500 text-sm font-medium">Razorpay Transaction ID</span>
+                     <span className="font-mono text-sm text-gray-800 bg-white px-3 py-1.5 rounded shadow-sm border border-gray-200">{record.transactionId}</span>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
