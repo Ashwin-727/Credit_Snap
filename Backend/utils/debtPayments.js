@@ -1,6 +1,6 @@
 const Order = require('../models/ordersModel');
 
-exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
+exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel, transactionId = null }) => {
   const numericAmount = Number(amountPaid);
 
   if (!numericAmount || Number.isNaN(numericAmount) || numericAmount <= 0) {
@@ -41,7 +41,8 @@ exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
     }],
     totalAmount: numericAmount,
     status: 'accepted',
-    balanceSnapshot: Math.max(0, hydratedDebt.amountOwed) // already rounded properly above
+    balanceSnapshot: Math.max(0, hydratedDebt.amountOwed), // already rounded properly above
+    transactionId: transactionId
   });
 
   return {
