@@ -26,7 +26,8 @@ const httpServer = createServer(app);
 // Initialize Socket.IO with Cross-Origin Resource Sharing (CORS) rules
 const io = new Server(httpServer, {
   cors: {
-    origin: true,
+    origin: ['http://localhost:5173', 'http://localhost:5174'],
+
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
   },
