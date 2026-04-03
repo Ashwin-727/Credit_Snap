@@ -1,4 +1,6 @@
 const Order = require('../models/ordersModel');
+const Payment = require('../models/paymentModel');
+const crypto = require('crypto');
 
 exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
   const numericAmount = Number(amountPaid);
@@ -43,6 +45,22 @@ exports.settleDebtPayment = async ({ debt, amountPaid, receiptLabel }) => {
     status: 'accepted',
     balanceSnapshot: Math.max(0, hydratedDebt.amountOwed) // already rounded properly above
   });
+
+  // Also store offline payments in the database
+  if (receiptLabel === 'Offline Debt Payment') {
+    await Payment.create({
+      student: student._id,
+      canteen: hydratedDebt.canteen,
+      debt: hydratedDebt._id,
+      purpose: 'debt',
+      amount: numericAmount,
+      provider: 'offline',
+      receipt: `rcpt_offline_${crypto.randomBytes(8).toString('hex')}`,
+      providerOrderId: `offline_order_${crypto.randomBytes(8).toString('hex')}`,
+      status: 'paid',
+      settledAt: new Date()
+    });
+  }
 
   return {
     canteenDebt: hydratedDebt.amountOwed,
