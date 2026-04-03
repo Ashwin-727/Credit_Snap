@@ -1,4 +1,5 @@
 node_modules
 Backend/.env
 *.pdf
+Backend/coverage/
 *.tex
