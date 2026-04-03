@@ -107,7 +107,7 @@ export default function App() {
           <Route path="/student" element={<RoleProtectedRoute allowedRole="student"><StudLayout /></RoleProtectedRoute>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<StudDashboard />} />
-            <Route path="canteens" element={<StudCanteens />} />
+            <Route path="canteens/*" element={<StudCanteens />} />
             <Route path="profile" element={<StudProfile />} />
             <Route path="history" element={<StudHistory />} />
             <Route path="help" element={<StudentHelp />} />
