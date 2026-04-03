@@ -27,6 +27,12 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Order must contain at least one item.' });
     }
 
+    for (const item of items) {
+      if (item.quantity > 100) {
+        return res.status(400).json({ status: 'fail', message: `Cannot order more than 100 of ${item.name}.` });
+      }
+    }
+
     // 1. SAFETY CHECK: Enforce Per-Canteen Credit Limits before creating the order
     const student = await User.findById(req.user.id);
     const targetCanteen = await Canteen.findById(canteenId);
