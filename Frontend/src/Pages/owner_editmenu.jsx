@@ -132,7 +132,7 @@ export default function OwnerEditMenu() {
     showAlert("Success", `${newName} has been added to the menu!`, "success");
   } catch (err) {
     console.error("Error adding item:", err);
-    showAlert("Error", "Failed to add item to menu.", "error");
+    showAlert("Error", err.response?.data?.message || "Failed to add item to menu.", "error");
   }
 };
 
@@ -169,7 +169,7 @@ export default function OwnerEditMenu() {
       showAlert("Updated", "Item updated successfully.", "success");
     } catch (err) {
       console.error("Error saving edits:", err);
-      showAlert("Error", "Failed to save edits to database", "error");
+      showAlert("Error", err.response?.data?.message || "Failed to save edits to database.", "error");
     }
   };
 

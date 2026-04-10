@@ -120,6 +120,14 @@ exports.addMenuItem = async (req, res) => {
     // Sanitize input: Remove leading/trailing spaces and collapse multiple spaces
     const trimmedName = req.body.name.trim().replace(/\s+/g, ' ');
 
+    // Validate: name must contain at least one alphabetical letter (allows "7UP", "Item 3", etc.)
+    if (!/[a-zA-Z]/.test(trimmedName)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Item name must contain at least one alphabetical letter (e.g., "7UP" is fine, but "123" is not).'
+      });
+    }
+
     // Prevent duplicate item names (case-insensitive)
     const existingItem = await MenuItem.findOne({
       canteenId: canteenId,
@@ -159,6 +167,18 @@ exports.addMenuItem = async (req, res) => {
  */
 exports.updateMenuItem = async (req, res) => {
   try {
+    // If updating the name, apply the same letter-check validation
+    if (req.body.name !== undefined) {
+      const trimmedName = req.body.name.trim().replace(/\s+/g, ' ');
+      if (!/[a-zA-Z]/.test(trimmedName)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Item name must contain at least one alphabetical letter (e.g., "7UP" is fine, but "123" is not).'
+        });
+      }
+      req.body.name = trimmedName;
+    }
+
     const updatedItem = await MenuItem.findByIdAndUpdate(
       req.params.itemId,
       req.body,
