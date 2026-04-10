@@ -131,8 +131,11 @@ export default function OwnerProfile() {
         adminName: editForm.adminName,
         phone: editForm.phone,
         timings: formatTimings(timingParts),
-        profilePhoto: editForm.profilePhoto ?? "",
       };
+
+      if (editForm.profilePhoto !== ownerInfo.profilePhoto) {
+        payload.profilePhoto = editForm.profilePhoto ?? "";
+      }
 
       if (editForm.razorpayMerchantKeyId?.trim()) {
         payload.razorpayMerchantKeyId = editForm.razorpayMerchantKeyId.trim();

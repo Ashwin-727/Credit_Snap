@@ -240,6 +240,12 @@ const StudentCanteens = () => {
         prev.map(c => c._id === payload.canteenId ? { ...c, status: payload.isOpen ? "Open" : "Closed" } : c)
       );
 
+      setSelectedCanteen(prev =>
+        prev && prev._id === payload.canteenId
+          ? { ...prev, status: payload.isOpen ? "Open" : "Closed" }
+          : prev
+      );
+
       // If the canteen the user is currently viewing closes, kick them back to the main list
       if (selectedCanteen?._id === payload.canteenId && !payload.isOpen) {
         showAlert("Canteen Closed", "This canteen has closed. Returning to the canteen list.", "info");
@@ -249,6 +255,38 @@ const StudentCanteens = () => {
     socket.on("canteen-status-updated", handleCanteenStatusUpdated);
     return () => socket.off("canteen-status-updated", handleCanteenStatusUpdated);
   }, [selectedCanteen]);
+
+  useEffect(() => {
+    const handleCanteenDetailsUpdated = (payload) => {
+      setCanteensData(prev =>
+        prev.map(c => (
+          c._id === payload.canteenId
+            ? {
+                ...c,
+                name: payload.name ?? c.name,
+                timings: payload.timings ?? c.timings,
+                status: payload.isOpen !== undefined ? (payload.isOpen ? "Open" : "Closed") : c.status
+              }
+            : c
+        ))
+      );
+
+      setSelectedCanteen(prev =>
+        prev && prev._id === payload.canteenId
+          ? {
+              ...prev,
+              name: payload.name ?? prev.name,
+              timings: payload.timings ?? prev.timings,
+              status: payload.isOpen !== undefined ? (payload.isOpen ? "Open" : "Closed") : prev.status
+            }
+          : prev
+      );
+    };
+
+    socket.on("canteen-details-updated", handleCanteenDetailsUpdated);
+
+    return () => socket.off("canteen-details-updated", handleCanteenDetailsUpdated);
+  }, []);
 
 
   // ==========================================
