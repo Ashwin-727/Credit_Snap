@@ -336,7 +336,32 @@ exports.updateMyProfile = async (req, res) => {
     if (req.body.phone) user.phoneNo = req.body.phone;
     if (req.body.hallNo) user.hallNo = req.body.hallNo;
     if (req.body.roomNo) user.roomNo = req.body.roomNo;
-    if (req.body.profilePhoto !== undefined) user.profilePhoto = req.body.profilePhoto;
+    if (req.body.profilePhoto !== undefined) {
+      const photo = req.body.profilePhoto;
+
+      // 1. Must be a base64 data URI
+      const dataUriRegex = /^data:(image\/(jpeg|png|webp|gif));base64,/;
+      if (!dataUriRegex.test(photo)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Profile photo must be a valid image (jpeg, png, webp, or gif).'
+        });
+      }
+
+      // 2. Decode and check actual byte size (limit: 500 KB)
+      const MAX_BYTES = 500 * 1024; // 500 KB
+      const base64Data = photo.split(',')[1] || '';
+      // Base64 encodes 3 bytes into 4 chars, so decoded size ≈ base64Length * 0.75
+      const approxBytes = Math.ceil((base64Data.length * 3) / 4);
+      if (approxBytes > MAX_BYTES) {
+        return res.status(400).json({
+          status: 'fail',
+          message: `Profile photo exceeds the 500 KB size limit. Please compress the image and try again.`
+        });
+      }
+
+      user.profilePhoto = photo;
+    }
     
     await user.save({ validateBeforeSave: false });
 
