@@ -92,14 +92,31 @@ export default function OwnerDashboard() {
       showAlert(`💰 Payment Received!`, `${data.studentName} paid ₹${data.amount} online.`, 'success');
     };
 
+    // When a student cancels their pending order (e.g., clicks "Add more items"),
+    // or when an order is accepted/rejected, update the UI instantly without refresh.
+    const handleOrderStatusUpdated = (updatedOrder) => {
+      if (updatedOrder.status === 'cancelled') {
+        // Remove the cancelled card immediately so the owner can't accidentally accept it
+        setOrders(prevOrders => prevOrders.filter(o => o._id !== updatedOrder._id));
+      } else {
+        // For accepted/rejected, update the card status in place
+        setOrders(prevOrders =>
+          prevOrders.map(o => o._id === updatedOrder._id ? { ...o, status: updatedOrder.status } : o)
+        );
+      }
+    };
+
     socket.on('newOrder', handleNewOrder);
     socket.on('payment-received', handlePayment);
+    socket.on('orderStatusUpdated', handleOrderStatusUpdated);
 
     return () => {
       socket.off('newOrder', handleNewOrder);
       socket.off('payment-received', handlePayment);
+      socket.off('orderStatusUpdated', handleOrderStatusUpdated);
     };
   }, [canteen]);
+
 
   // ==========================================
   //4. API ACTIONS

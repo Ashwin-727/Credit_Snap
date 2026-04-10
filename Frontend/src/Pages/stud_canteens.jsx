@@ -671,7 +671,22 @@ const StudentCanteens = () => {
           <div className="mb-6 flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-2xl font-medium text-black">Review Your Order</h2>
             <button
-              onClick={() => navigate(`/student/canteens/${selectedCanteen?.name.toLowerCase().replace(/\s+/g, '-')}`)}
+              onClick={async () => {
+                // Auto-cancel any pending order at this canteen before going back to edit.
+                // This prevents the race condition where the owner accepts the old order
+                // while the student is modifying their cart.
+                try {
+                  const token = sessionStorage.getItem('token');
+                  await axios.patch(
+                    `${BASE_URL}/api/orders/cancel-pending-at-canteen`,
+                    { canteenId: selectedCanteen._id },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                } catch {
+                  // Silent fail — even if cancel errors out, let the student go back
+                }
+                navigate(`/student/canteens/${selectedCanteen?.name.toLowerCase().replace(/\s+/g, '-')}`);
+              }}
               className="text-[#f97316] hover:text-[#ea580c] font-semibold text-sm underline cursor-pointer"
             >
               + Add more items
