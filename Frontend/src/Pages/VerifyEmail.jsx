@@ -1,7 +1,7 @@
 import { BASE_URL } from '../config';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import './Login.css';
+
 
 const VerifyEmail = () => {
   const { token } = useParams();

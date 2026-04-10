@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Login.css'; // Reusing your existing styles!
+
 
 const VerifyEmailPending = () => {
   const navigate = useNavigate();
