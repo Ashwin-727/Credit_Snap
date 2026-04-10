@@ -1,4 +1,4 @@
-                              import { BASE_URL } from '../config';
+import { BASE_URL } from '../config';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import studentLogo from '../assets/Student_without_bg_logo.png';
