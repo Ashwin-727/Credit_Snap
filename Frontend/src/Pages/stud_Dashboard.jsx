@@ -303,6 +303,13 @@ export default function StudDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      // Auto-dismiss the old order from the dashboard so it doesn't clutter as "Cancelled" upon edit
+      const dismissed = JSON.parse(localStorage.getItem('dismissedOrders') || '[]');
+      if (!dismissed.includes(order._id)) {
+        dismissed.push(order._id);
+        localStorage.setItem('dismissedOrders', JSON.stringify(dismissed));
+      }
+
       // 2. Extract Canteen ID safely (handling populated vs unpopulated mongoose documents)
       const canteenId = typeof order.canteen === 'object' ? order.canteen._id : order.canteen;
 
