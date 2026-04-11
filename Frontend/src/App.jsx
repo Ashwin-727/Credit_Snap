@@ -14,7 +14,7 @@ import VerifyEmailPending from './Pages/VerifyEmailPending';
 //--Student Pages ---
 import StudLayout from './Pages/stud_layout';
 import StudDashboard from './Pages/stud_Dashboard';
-import StudCanteens from './Pages/stud_Canteens';
+import StudCanteens from './Pages/stud_canteens';
 import StudProfile from './Pages/stud_profile';
 import StudHistory from './Pages/stud_history';
 import ChangePassword from './Pages/ChangePassword';
@@ -50,7 +50,7 @@ axios.interceptors.response.use(
     //If the backend rejects the token because it's expired or invalid
     if (error.response && error.response.status === 401) {
       console.warn("Token expired or invalid. Auto-logging out...");
-      
+
       //Wipe everything clean so it doesn't get stuck in a loop
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -58,9 +58,9 @@ axios.interceptors.response.use(
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('canteenId');
-      
+
       //Kick them back to the Login page ("/")
-      window.location.href = '/'; 
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
