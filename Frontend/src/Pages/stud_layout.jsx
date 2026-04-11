@@ -4,6 +4,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, Home, Utensils, Wallet, History, HelpCircle, Bell, UserCircle, Settings, LogOut, CheckCircle, XCircle, AlertTriangle, IndianRupee, X } from 'lucide-react';
 import studentLogo from '../assets/Student_without_bg_logo.png';
 import { socket } from '../socket';
+import { useNotifications } from '../context/NotificationContext';
 
 const NOTIFICATION_STORAGE_PREFIX = 'creditsnap:notifications';
 const MAX_NOTIFICATIONS = 20;
@@ -90,6 +91,7 @@ const clearStoredNotifications = () => {
  * listener that catches real-time events (like order updates) no matter what page the user is on.
  */
 export default function StudLayout() {
+  const { showAlert } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -318,12 +320,19 @@ export default function StudLayout() {
 
   const toggleNotifications = () => { setIsNotificationsOpen(!isNotificationsOpen); setIsProfileOpen(false); };
   const toggleProfile = () => { setIsProfileOpen(!isProfileOpen); setIsNotificationsOpen(false); };
-  const handleSidebarNavigate = (path, options) => {
+  
+  const handleInterceptedNavigation = (path, options) => {
+    if (sessionStorage.getItem('isChangingOrder') === 'true' && !path.startsWith('/student/canteens')) {
+      showAlert("Warning", "Please complete your order modification first.", "warning");
+      return;
+    }
     navigate(path, options);
     if (!isDesktopViewport()) {
       setIsSidebarOpen(false);
     }
   };
+
+  const handleSidebarNavigate = (path, options) => handleInterceptedNavigation(path, options);
 
   // Checks if the current URL matches a sidebar link to highlight it
   const isActive = (path) => location.pathname.includes(path);
@@ -337,7 +346,13 @@ export default function StudLayout() {
     setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
     setIsNotificationsOpen(false);
 
-    // 2. Route based on notification content keywords
+    // 2. Check intercept override
+    if (sessionStorage.getItem('isChangingOrder') === 'true') {
+      showAlert("Warning", "Please complete your order modification first.", "warning");
+      return;
+    }
+
+    // 3. Route based on notification content keywords
     if (notif.title.includes('Payment Received')) {
       // Navigate to History and auto-open the Transaction tab
       navigate('/student/history', { state: { targetTab: 'debt' } });
@@ -435,7 +450,7 @@ export default function StudLayout() {
           <div className="flex items-center h-full gap-2">
             <Menu className="w-6 h-6 md:hidden cursor-pointer text-slate-800" onClick={() => setIsSidebarOpen(true)} />
             <img src={studentLogo} alt="CreditSnap Logo"
-              onClick={() => navigate('/student/dashboard')}
+              onClick={() => handleInterceptedNavigation('/student/dashboard')}
               className="h-full max-w-[9.5rem] sm:max-w-none w-auto object-contain mix-blend-multiply scale-[1.1] origin-left ml-2 cursor-pointer hover:opacity-80 transition"
             />
           </div>
@@ -523,10 +538,14 @@ export default function StudLayout() {
                     <p className="text-xs text-gray-500">Roll No: {userProfile ? userProfile.rollNo : "Loading..."}</p>
                   </div>
                   <div className="flex flex-col">
-                    <div onClick={() => { navigate('/student/profile'); setIsProfileOpen(false); }} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 text-sm text-gray-700 transition">
+                    <div onClick={() => { handleInterceptedNavigation('/student/profile'); setIsProfileOpen(false); }} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 text-sm text-gray-700 transition">
                       <Settings className="w-4 h-4" /> Account Settings
                     </div>
                     <div onClick={() => {
+                      if (sessionStorage.getItem('isChangingOrder') === 'true') {
+                        showAlert("Warning", "Please complete your order modification first.", "warning");
+                        return;
+                      }
                       //Fully clear both local and session storage on logout
                       clearStoredNotifications();
                       sessionStorage.removeItem('token');

@@ -298,6 +298,9 @@ export default function StudDashboard() {
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
+      // Set global state to prevent user navigation while changing order
+      sessionStorage.setItem('isChangingOrder', 'true');
+
       // 1. Cancel the existing order on the backend so they aren't charged double
       await axios.patch(`${BASE_URL}/api/orders/${order._id}/cancel`, {}, {
         headers: { Authorization: `Bearer ${token}` }

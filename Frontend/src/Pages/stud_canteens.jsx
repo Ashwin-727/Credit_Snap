@@ -317,6 +317,7 @@ const StudentCanteens = () => {
       });
 
       if (response.data.status === 'success') {
+        sessionStorage.removeItem('isChangingOrder');
         setToast(`Order sent to ${selectedCanteen.name}!`);
         setTimeout(() => setToast(null), 3500);
         goToList(); // Reset view after successful order
