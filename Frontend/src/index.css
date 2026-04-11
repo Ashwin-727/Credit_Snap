@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@layer base {
+  button {
+    @apply transition-transform duration-[50ms] ease-in-out active:scale-[0.97];
+  }
+}
