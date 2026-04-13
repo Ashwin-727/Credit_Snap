@@ -317,6 +317,7 @@ const StudentCanteens = () => {
       });
 
       if (response.data.status === 'success') {
+        sessionStorage.removeItem('isChangingOrder');
         setToast(`Order sent to ${selectedCanteen.name}!`);
         setTimeout(() => setToast(null), 3500);
         goToList(); // Reset view after successful order
@@ -577,7 +578,7 @@ const StudentCanteens = () => {
             return (
               <div
                 key={canteen._id}
-                className={`mb-4 flex flex-col gap-4 overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between sm:p-6 ${isOpen ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-70'}`}
+                className={`mb-4 flex flex-col gap-4 overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between sm:p-6 ${isOpen ? 'cursor-pointer hover:shadow-md active:scale-[0.97] active:duration-[50ms]' : 'cursor-not-allowed opacity-70'}`}
                 onClick={() => goToMenu(canteen)}
               >
                 <div>
