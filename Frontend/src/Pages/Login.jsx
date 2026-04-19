@@ -448,10 +448,17 @@ const Login = () => {
               </button>
             </form>
 
-            <div className={`signup-redirect ${isStudent ? '' : 'signup-redirect-hidden'}`}>
-              <span className="light-text">Don't have an account? </span>
-              <a href="/signup">Sign Up.</a>
-            </div>
+            {isStudent ? (
+              <div className="signup-redirect">
+                <span className="light-text">Don't have an account? </span>
+                <a href="/signup">Sign Up.</a>
+              </div>
+            ) : (
+              <div className="signup-redirect" style={{ marginTop: '35px', textAlign: 'center', fontSize: '13px' }}>
+                <span className="light-text" style={{ color: '#666' }}>Need a canteen account? </span>
+                <a href="mailto:creditsnapiitk24@gmail.com" style={{ color: '#1a365d', fontWeight: '600', textDecoration: 'none' }}>Contact us here.</a>
+              </div>
+            )}
 
           </div>
         </div>
